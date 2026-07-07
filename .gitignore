@@ -21,3 +21,9 @@ renv/staging/
 
 # leftover R temp data files
 *.RDataTmp*
+
+# Generated/output - not tracked, keep repo to core analysis files only
+Data_Analysis_Script_files/
+Tables_and_Figures/
+test_render_files/
+renv/
