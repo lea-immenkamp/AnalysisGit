@@ -1,0 +1,23 @@
+# OS
+.DS_Store
+
+# R session / user files
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+
+# renv - keep the lockfile and activation script, skip the local library
+renv/library/
+renv/local/
+renv/cellar/
+renv/lock/
+renv/python/
+renv/sandbox/
+renv/staging/
+
+# knitr build cache (regenerable, large)
+*_cache/
+
+# leftover R temp data files
+*.RDataTmp*
