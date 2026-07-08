@@ -43,25 +43,23 @@ feedback.
 - Table \@ref(tab:RQ1-anova-trial-output): Model Comparison of trial random effect with Likelihood Ratio Test
 - Table \@ref(tab:RQ1-anova-initial-pq-output): Model Comparison of initial plan quality with Likelihood Ratio Test
 - Table \@ref(tab:RQ1-visualization-table): Linear Mixed Model (H1)
-- Table \@ref(tab:RQ1-visualization-plot): Estimated Marginal Means of Revised Plan Quality by Feedback Condition
 - Table \@ref(tab:H2-1-visualization): Mediation Model of Perceived Helpfulness on Plan Quality Improvement (H2.1)
 - Table \@ref(tab:H2-2-visualization): Mediation Model of Perceived Motivation on Plan Quality Improvement (H2.2)
 - Table \@ref(tab:RQ3-visualization-table): Linear Mixed Model with Moderator Effect (H3)
+- Table \@ref(tab:robust-RQ1-visualization): Results of the Cumulative Link Mixed Model for Plan Quality
 - Table \@ref(tab:trial-anova-initial-table): Repeated Measures Anova for Initial Plan Quality across Trials
 - Table \@ref(tab:trial-anova-revised-table): Repeated Measures Anova for Revised Plan Quality across Trials
+- Table \@ref(tab:robustness-check-RQ3-visualization): Model Comparison Receptivity: Original vs. Robustness Check (3-item)
 - Table \@ref(tab:exploratory-RQ3-table): Exploratory Item-Level Moderation Analysis of Receptivity
 
 
 
 
-Extra listing
+
+Extra listing when I received the rubric rating (to be included)
 - [Table 4: Distribution Scores for Initial and Revised Plan Quality](#tab-4)
 - [Table 5: Reliability and Normality Test for the five Rubrics](#tab-5)
 
-Extra listing + printing
-- [Table x: Results of the Cumulative Link Mixed Model for Plan Quality](#tab-x)
-- [Table y: Model Comparison Receptivity: Original vs. Robustness Check (3-item) <span id='tab-y'](#tab-y)
-- [Table z: Exploratory Item-Level Moderation Analysis of Receptivity <span id='tab-y'](#tab-z)
 
 
 
@@ -119,9 +117,7 @@ renv::restore(prompt = FALSE)
 library(tidyverse)
 library(knitr)
 library(kableExtra)
-library(ggtext)
 library(ordinal)
-library(janitor)
 library(emmeans)
 library(lmerTest)
 library(performance)
@@ -164,15 +160,14 @@ alpha_threshold_acceptable <- .70   # Cronbach's alpha cutoff for "acceptable" r
 ```{r package-management}
 # Create table of packages, their purpose and version 
 packages <- data.frame(
-  Package = c("tidyverse", "janitor", "renv", "here", "conflicted",
+  Package = c("tidyverse", "renv", "here", "conflicted",
               "ordinal", "lme4", "lmerTest", "afex", "rstatix", "emmeans",
               "car", "performance", "r2glmm", "DHARMa", "lavaan",
-              "psych", "sjPlot", "ggtext",
+              "psych", "sjPlot",
               "knitr", "kableExtra", "gt",
               "flextable", "officer"),
   Purpose = c(
     "Data wrangling, transformation, and visualization",
-    "Data cleaning and preparation",
     "precise version specification for reproducibility",
     "relative paths",
     "Manage namespace conflicts",
@@ -189,7 +184,6 @@ packages <- data.frame(
     "Structural Equation Modeling (SEM)",
     "Psychometric analysis and descriptive statistics",
     "Create publication-ready statistical tables and figures",
-    "Enhanced text formatting in ggplot2 plots",
     "Dynamic document generation",
     "Table formatting for HTML and LaTeX",
     "Create formatted tables for publication",
@@ -411,13 +405,13 @@ fmt <- function(x, digits = 2) {
 }
 ```
 
+
 ```{r helper-functions-lmm-table, include=FALSE}
-# Extracts fixed & random effects of lmerTest-Models in an APA-format table
 extract_lmm_table <- function(model, term_labels) {
-  coefs <- summary(model)$coefficients
+  coefs  <- summary(model)$coefficients
   ci_all <- confint(model, method = "profile")
 
-  coef_tab <- data.frame(
+  coef_tab <- tibble(
     Variable = rownames(coefs),
     Estimate = fmt(coefs[, "Estimate"]),
     SE       = fmt(coefs[, "Std. Error"]),
@@ -425,80 +419,71 @@ extract_lmm_table <- function(model, term_labels) {
     p        = format_p(coefs[, "Pr(>|t|)"])
   )
 
-  ci_tab <- data.frame(
+  ci_tab <- tibble(
     Variable = rownames(ci_all),
     CI_low   = ci_all[, 1],
     CI_high  = ci_all[, 2]
   )
 
-  fixed_part <- ci_tab |>
-    filter(Variable %in% rownames(coefs)) |>
-    merge(coef_tab, by = "Variable", all.y = TRUE) |>
-    dplyr::select(Effect = Variable, Estimate, SE, LL = CI_low, UL = CI_high, t, p) |>
-    mutate(
-      LL = fmt(as.numeric(LL)),
-      UL = fmt(as.numeric(UL)),
-      Effect = gsub("\\(Intercept\\)", "Intercept", Effect),
+  fixed_part <- coef_tab |>
+    dplyr::left_join(ci_tab, by = "Variable") |>
+    dplyr::transmute(
+      Effect = gsub("\\(Intercept\\)", "Intercept", Variable),
+      Estimate, SE, LL = fmt(CI_low), UL = fmt(CI_high), t, p,
       Group = "Fixed Effects"
     )
 
   re <- as.data.frame(VarCorr(model))
-  re$grp <- ifelse(re$grp == "child_id", "τ\u2080\u2080 (Intercept)", "σ² (Residual)")
+  re$grp <- ifelse(re$grp == "child_id", "τ₀₀ (Intercept)", "σ² (Residual)")
 
-  rand_ci_raw <- ci_tab[grep(".sig", ci_tab$Variable), ]
-  child_ll    <- as.numeric(rand_ci_raw[1, "CI_low"])^2
-  child_ul    <- as.numeric(rand_ci_raw[1, "CI_high"])^2
-  residual_ll <- as.numeric(rand_ci_raw[2, "CI_low"])^2
-  residual_ul <- as.numeric(rand_ci_raw[2, "CI_high"])^2
+  child_sd_ci    <- ci_tab[ci_tab$Variable == ".sig01", ]
+  residual_sd_ci <- ci_tab[ci_tab$Variable == ".sigma", ]
 
-  random_part <- data.frame(
-    Effect   = re$grp,
-    Estimate = fmt(re$vcov),
-    SE       = fmt(re$sdcor),
-    LL       = fmt(c(child_ll, residual_ll)),
-    UL       = fmt(c(child_ul, residual_ul)),
+  random_part <- tibble(
+    Effect = re$grp, Estimate = fmt(re$vcov), SE = fmt(re$sdcor),
+    LL = fmt(c(child_sd_ci$CI_low^2, residual_sd_ci$CI_low^2)),
+    UL = fmt(c(child_sd_ci$CI_high^2, residual_sd_ci$CI_high^2)),
     t = "", p = "", Group = "Random Effects"
   )
 
-  random_header <- data.frame(
+  random_header <- tibble(
     Effect = "", Estimate = "Variance", SE = "SD",
     LL = "", UL = "", t = "", p = "", Group = "Random Effects"
   )
 
-  table_out <- rbind(fixed_part, rbind(random_header, random_part))
-  table_out$Effect <- dplyr::recode(table_out$Effect, !!!term_labels)
+  table_out <- dplyr::bind_rows(fixed_part, random_header, random_part)
+  matched_labels <- term_labels[table_out$Effect]
+  table_out$Effect <- dplyr::coalesce(unname(matched_labels), table_out$Effect)
   table_out
 }
 
-
-render_lmm_gt <- function(table_data, caption) {
+render_lmm_gt <- function(table_data, caption, estimate_label = "b") {
   table_data |>
     gt(rowname_col = "Effect", groupname_col = "Group") |>
     tab_caption(caption = caption) |>
-    cols_label(Estimate = md("*b*"), SE = md("*SE*"), LL = md("*LL*"),
+    cols_label(Estimate = md(paste0("*", estimate_label, "*")), SE = md("*SE*"), LL = md("*LL*"),
                UL = md("*UL*"), t = md("*t*"), p = md("*p*")) |>
     tab_spanner(label = "95% CI", columns = c(LL, UL)) |>
     cols_align(align = "center", columns = c(Estimate, SE, LL, UL, t, p)) |>
-    cols_width(
-      Effect ~ px(240),
-      everything() ~ px(80)
-    ) |>
-    gt::tab_style(style = cell_text(font = "Times New Roman"), locations = cells_row_groups()) |>
-    gt::tab_style(style = cell_text(indent = px(20), align = "left"), locations = cells_stub()) |>
-    tab_options(data_row.padding = px(8)) |>
-    gt::tab_options(
+    cols_width(Effect ~ px(240), everything() ~ px(80)) |>
+    opt_table_font(font = "Times New Roman") |>
+    tab_style(style = cell_text(indent = px(20), align = "left"), locations = cells_stub()) |>
+    tab_options(
+      data_row.padding = px(8),
       column_labels.border.top.style = "solid", column_labels.border.top.width = px(1),
       column_labels.border.top.color = "black",
       column_labels.border.bottom.style = "solid", column_labels.border.bottom.width = px(1),
       column_labels.border.bottom.color = "black",
       table_body.border.bottom.style = "solid", table_body.border.bottom.width = px(1),
-      table_body.border.bottom.color = "black"
+      table_body.border.bottom.color = "black",
+      stub.border.style = "none"
     )
 }
 ```
 
+
 ```{r helper-function-plot-theme, include=FALSE}
-# Shared ggplot theme for all thesis figures, so styling changes only need to be made in one place
+# Shared ggplot theme for all thesis figures
 theme_thesis <- function(base_size = 12, strip_face = "italic") {
   theme_minimal(base_family = "serif") +
     theme(
@@ -1223,6 +1208,7 @@ Feedback receptivity was measured prior to the planning trials.
 
 ```{r visualization-receptivity, include=FALSE}
 # Prepare data for visualization of feedback receptivity items and total score by reshaping the data into a long format, allowing for the creation of violin plots to show the distribution of responses for each receptivity measure.
+# Note: recep_q4_r is the reverse-coded item and needs to be included instead of the original recep_q4 item to ensure that all items are oriented in the same direction for analysis. 
 feedback_receptivity_long <- merged_data |> 
   distinct(child_id, .keep_all = TRUE) |>  
   pivot_longer(
@@ -1419,13 +1405,14 @@ plan quality.
 
 - Non-Linearity detected
 - Heteroscedasticity detected
-- Non-normality of residuals detected, <i>p</i> \< .001
+- Non-normality of residuals detected
 - Independence of residuals ✓
 - Normality of random effects ✓
-- *Conclusion:* Data does not meet all assumptions for analysis.
+- *Conclusion:* Data does not meet all assumptions for analysis (full diagnostic output and test statistics reported in the
+  Appendix).
   Although linear mixed-effects models demonstrate high robustness to
   heteroscedasticity and non-normality of residuals, a robustness check
-  will be performed in the end.
+  will be performed in the end. 
 
 ✓ = assumption met
 
@@ -1611,10 +1598,11 @@ will predict a higher plan quality after revision.
 **RQ2, H2.1 Results of Assumption Testing**
 
 - Non-Linearity of Path Relations detected
-- Non-normality of residuals detected, <i>p</i> \< .001
+- Non-normality of residuals detected
 - Heteroscedasticity detected
 - No Omitted Confounders ✓ (Theoretically assumed)
-- *Conclusion:* Data does not meet all assumptions for analysis.
+- *Conclusion:* Data does not meet all assumptions for analysis (full diagnostic output and test statistics reported in the
+  Appendix).
   Deviations could reflect the bounded categorical nature of the scores,
   which is why a Bootstrapping will be performed
 
@@ -1754,10 +1742,11 @@ children’s receptivity to the feedback.
 
 - Non-Linearity detected
 - Heteroscedasticity detected
-- Non-normality of residuals detected, <i>p</i> \< .001
+- Non-normality of residuals detected
 - Normality of random effects ✓
 - No multicollinearity ✓
-- *Conclusion:* Data does not meet all the assumptions for analysis.
+- *Conclusion:* Data does not meet all the assumptions for analysis (full diagnostic output and test statistics reported in the
+  Appendix).
 
 ✓ = assumption met
 
@@ -1801,7 +1790,6 @@ condition. CI = confidence interval; <i>LL</i> = lower limit; <i>UL</i>
 = upper limit. R²m = 0.186, R²c = 0.261.
 
 # Additional Analyses
-# THINK ABOUT INCLUDIN DECOMPOSED INITIAL PLAN QUALITY AS COVARIATE 
 
 ## Robustness Check RQ1: Ordinal Multilevel Logistic Regression
 
@@ -1820,10 +1808,10 @@ results are consistent with those obtained from the linear mixed model.
 
 - Independence of observations: Random Intercept (1 \| child_id) to
   account for repeated measures within children. ✓
-- Proportional odds, <i>p</i> = .059 ✓
+- Proportional odds ✓
 - No perfect separation ✓
-- No Multicollinearity, <i>VIF</i> \< 2.1 ✓ *Conclusion:* Data meets
-  assumptions for analysis
+- No Multicollinearity ✓ 
+- *Conclusion:* Data meets assumptions for analysis
 
 ```{r data-preparation-robust-RQ1, include=FALSE}
 # Prepare data for ordinal multilevel logistic regression by selecting relevant columns, reshaping the data to long format, and converting variables to appropriate types (factor and ordered). This prepares the dataset for fitting a cumulative link mixed model (CLMM) to analyze the effects of feedback condition and time point on plan quality.
@@ -1857,32 +1845,116 @@ clmm_model <- clmm(
 )
 ```
 
-**Table x.** Results of the Cumulative Link Mixed Model for Plan
-Quality <span id='tab-x'>
 
-```{r robust-RQ1-visualization}
-# Render the results of the cumulative link mixed model (CLMM) for plan quality in a publication-ready table format using the sjPlot package. The table includes estimates, odds ratios, confidence intervals, and p-values for each predictor in the model, with appropriate labels and formatting for clarity.
-sjPlot::tab_model(
-  clmm_model,
-  title = "Results of the Cumulative Link Mixed Model for Plan Quality",
-  dv.labels = "Plan Quality",
-  pred.labels = c(
-    "0|1",
-    "1|2",
-    "2|3",
-    "3|4",
-    "4|5",
-    "Feedback condition [dialogic Feedback]",
-    "Time [Post-Feedback]",
-    "Feedback condition [dialogic Feedback]<br>× Time [Post-Feedback]"
-  ),
-  emph.p = FALSE,
-  p.style = "stars",
-  CSS = list(
-    css.caption = "font-weight:normal; text-align:left; color:#888888;",
-    css.table   = "td { padding-left: 15px; padding-right: 15px; }"
+```{r robust-RQ1-visualization, tab.cap="Results of the Cumulative Link Mixed Model for Plan Quality"}
+# Render the results of the cumulative link mixed model (CLMM) for plan quality in a publication-ready table format using the gt package. The table includes estimates, odds ratios, confidence intervals, and p-values for each predictor in the model, with appropriate labels and formatting for clarity.
+extract_clmm_table <- function(model) {
+  coefs  <- summary(model)$coefficients
+  ci_all <- confint(model, type = "Wald")
+
+  stars <- dplyr::case_when(
+    coefs[, "Pr(>|z|)"] < .001 ~ "***",
+    coefs[, "Pr(>|z|)"] < .01  ~ "**",
+    coefs[, "Pr(>|z|)"] < .05  ~ "*",
+    TRUE ~ ""
   )
+
+  tibble(
+    Variable = rownames(coefs),
+    Estimate = paste0(
+      fmt(exp(coefs[, "Estimate"])),
+      ifelse(stars == "", "", paste0("", stars, ""))
+    ),
+    CI = paste0(fmt(exp(ci_all[, 1])), " – ", fmt(exp(ci_all[, 2]))),
+    Group = if_else(grepl("\\|", rownames(coefs)), "Thresholds", "Fixed Effects")
+  )
+}
+
+clmm_term_labels <- c(
+  "0|1" = "0|1",
+  "1|2" = "1|2",
+  "2|3" = "2|3",
+  "3|4" = "3|4",
+  "4|5" = "4|5",
+  "feedback_conditiondialogic Feedback" = "Feedback Condition (Dialogic)",
+  "time_pointPost-Feedback" = "Time (Post-Feedback)",
+  "feedback_conditiondialogic Feedback:time_pointPost-Feedback" = "Feedback Condition × Time"
 )
+
+table_clmm <- extract_clmm_table(clmm_model) |>
+  dplyr::mutate(Effect = dplyr::coalesce(unname(clmm_term_labels[Variable]), Variable)) |>
+  dplyr::select(Effect, Estimate, CI, Group)
+
+
+extract_tau00_clmm <- function(model) {
+  tau00 <- tryCatch({
+    vc  <- as.data.frame(VarCorr(model))
+    val <- vc$vcov[vc$grp == "child_id"]
+    if (length(val) == 1) val else NA_real_
+  }, error = function(e) NA_real_)
+
+  if (length(tau00) == 0 || is.na(tau00)) {
+    tau00 <- tryCatch({
+      val <- as.numeric(model$ST[[1]])^2
+      if (length(val) == 1) val else NA_real_
+    }, error = function(e) NA_real_)
+  }
+  tau00
+}
+
+sigma2_logit <- pi^2 / 3
+tau00        <- extract_tau00_clmm(clmm_model)
+r2_clmm      <- tryCatch(performance::r2_nakagawa(clmm_model), error = function(e) NULL)
+
+random_part <- tibble(
+  Effect = c("σ²", "τ₀₀ (child_id)"),
+  Estimate = c(fmt(sigma2_logit), if (is.na(tau00)) "NA" else fmt(tau00)),
+  CI = "",
+  Group = "Random Effects"
+)
+
+if (!is.na(tau00)) {
+  icc_clmm <- tau00 / (tau00 + sigma2_logit)
+  random_part <- dplyr::bind_rows(random_part, tibble(
+    Effect = "ICC", Estimate = fmt(icc_clmm), CI = "", Group = "Random Effects"
+  ))
+}
+
+if (!is.null(r2_clmm)) {
+  random_part <- dplyr::bind_rows(random_part, tibble(
+    Effect = "R² (marginal / conditional)",
+    Estimate = paste0(fmt(r2_clmm$R2_marginal, 3), " / ", fmt(r2_clmm$R2_conditional, 3)),
+    CI = "", Group = "Random Effects"
+  ))
+}
+
+table_clmm_full <- dplyr::bind_rows(table_clmm, random_part) |>
+  dplyr::mutate(Group = factor(Group, levels = c("Thresholds", "Fixed Effects", "Random Effects")))
+
+table_clmm_full |>
+  gt(rowname_col = "Effect", groupname_col = "Group") |>
+  tab_caption(caption = "Results of the Cumulative Link Mixed Model for Plan Quality") |>
+  tab_spanner(label = "Plan Quality", columns = c(Estimate, CI)) |>
+  cols_label(Estimate = md("*Odds Ratio*"), CI = md("*95% CI*")) |>
+  text_transform(
+    locations = cells_body(columns = Estimate),
+    fn = function(x) purrr::map(x, gt::html)
+  ) |>
+  cols_align(align = "center", columns = c(Estimate, CI)) |>
+  cols_width(Effect ~ px(260), everything() ~ px(140)) |>
+  opt_table_font(font = "Times New Roman") |>
+  tab_style(style = cell_text(indent = px(20), align = "left"), locations = cells_stub()) |>
+  tab_source_note(source_note = "* p < .05. ** p < .01. *** p < .001.") |>
+  tab_options(
+    data_row.padding = px(8),
+    column_labels.border.top.style = "solid", column_labels.border.top.width = px(1),
+    column_labels.border.top.color = "black",
+    column_labels.border.bottom.style = "solid", column_labels.border.bottom.width = px(1),
+    column_labels.border.bottom.color = "black",
+    table_body.border.bottom.style = "solid", table_body.border.bottom.width = px(1),
+    table_body.border.bottom.color = "black",
+    stub.border.style = "none"
+  )
 ```
 
 
@@ -2036,26 +2108,81 @@ psych::alpha(merged_data[, c("recep_q1", "recep_q2", "recep_q3")])
 
 # Re-fit H3 with the 3-item receptivity score to assess robustness of the moderation effect
 model_h3_robust <- lmerTest::lmer(
-  revised_pq ~ feedback_condition * receptivity_3items_c + initial_pq_c + (1 | child_id),
+  revised_pq ~ feedback_condition * receptivity_3items_c + initial_pq_c + initial_pq_mean_child + (1 | child_id),
   data = merged_data
 )
-summary(model_h3_robust)
 ```
 
 
-**Table y.** Model Comparison Receptivity: Original vs. Robustness Check (3-item) <span id='tab-y'>
+```{r robustness-check-RQ3-visualization, tab.cap="Model Comparison Receptivity: Original vs. Robustness Check (3-item)"}
+# Render a comparison table of the original linear mixed model (H3) and the robustness check model (H3 with 3-item receptivity score) using gt() styling. The table includes estimates, confidence intervals, and p-values for each predictor in both models, allowing for a side-by-side comparison of the effects of feedback condition and receptivity on revised plan quality.
+combine_lmm_tables <- function(models, model_names, term_labels) {
+  tables <- purrr::map2(models, model_names, function(model, model_name) {
+    extract_lmm_table(model, term_labels) |>
+      dplyr::filter(Group == "Fixed Effects") |>
+      dplyr::transmute(
+        Effect,
+        "{model_name}__est" := paste0(Estimate, " [", LL, ", ", UL, "]"),
+        "{model_name}__p"   := p
+      )
+  })
 
-```{r robustness-check-RQ3-visualization}
-# Render a comparison table of the original linear mixed model (H3) and the robustness check model (H3 with 3-item receptivity score) using the sjPlot package. The table includes estimates, standard errors, t-values, p-values, and confidence intervals for each predictor in both models, allowing for a side-by-side comparison of the effects of feedback condition and receptivity on revised plan quality.
-sjPlot::tab_model(
-  model_h3, model_h3_robust,
-  title = "Model Comparison Receptivity: Original vs. Robustness Check (3-item)",
-  dv.labels = c("Original (4-item receptivity)", "Robustness check (3-item, Item 4 removed)"),
-  CSS = list(
-    css.caption = "font-weight:normal; text-align:left; color:#888888;"
-  )
+  purrr::reduce(tables, dplyr::full_join, by = "Effect")
+}
+
+render_lmm_comparison_gt <- function(table_data, model_names, caption) {
+  gt_tab <- table_data |>
+    gt(rowname_col = "Effect") |>
+    tab_caption(caption = caption) |>
+    sub_missing(missing_text = "") |>
+    opt_table_font(font = "Times New Roman") |>
+    cols_width(Effect ~ px(220), everything() ~ px(150)) |>
+    tab_style(style = cell_text(indent = px(20), align = "left"), locations = cells_stub()) |>
+    tab_options(
+      data_row.padding = px(8),
+      column_labels.border.top.style = "solid", column_labels.border.top.width = px(1),
+      column_labels.border.top.color = "black",
+      column_labels.border.bottom.style = "solid", column_labels.border.bottom.width = px(1),
+      column_labels.border.bottom.color = "black",
+      table_body.border.bottom.style = "solid", table_body.border.bottom.width = px(1),
+      table_body.border.bottom.color = "black",
+      stub.border.style = "none"
+    )
+
+  for (model_name in model_names) {
+    gt_tab <- gt_tab |>
+      cols_label(
+        !!rlang::sym(paste0(model_name, "__est")) := md("*b* [95% CI]"),
+        !!rlang::sym(paste0(model_name, "__p"))   := md("*p*")
+      ) |>
+      tab_spanner(label = model_name, columns = tidyselect::starts_with(paste0(model_name, "__")))
+  }
+  gt_tab
+}
+
+model_comparison_labels <- c(
+  "Intercept" = "Intercept",
+  "feedback_conditiondialogic" = "Feedback Condition (Dialogic)",
+  "receptivity_c" = "Feedback Receptivity (Centered)",
+  "receptivity_3items_c" = "Feedback Receptivity (Centered)",
+  "initial_pq_c" = "Initial Plan Quality (Centered)",
+  "initial_pq_mean_child" = "Initial Plan Quality (Child Mean)",
+  "feedback_conditiondialogic:receptivity_c" = "Feedback Condition × Receptivity",
+  "feedback_conditiondialogic:receptivity_3items_c" = "Feedback Condition × Receptivity"
+)
+
+table_h3_comparison <- combine_lmm_tables(
+  models = list(model_h3, model_h3_robust),
+  model_names = c("Original (4-item)", "Robustness check (3-item)"),
+  term_labels = model_comparison_labels
+)
+render_lmm_comparison_gt(
+  table_h3_comparison,
+  model_names = c("Original (4-item)", "Robustness check (3-item)"),
+  caption = "Model Comparison Receptivity: Original vs. Robustness Check (3-item)"
 )
 ```
+
 
 **Exploratory Analysis**
 
@@ -2067,8 +2194,7 @@ sjPlot::tab_model(
   (experiential attitudes, instrumental attitudes, cognitive engagement,
   behavioral engagement).
   
-  
-**Table z.** Exploratory Item-Level Moderation Analysis of Receptivity <span id='tab-z'>
+
 
 ```{r exploratory-RQ3, include=FALSE}
 # Exploratory item-level moderation analysis of receptivity: Fit separate linear mixed models for each receptivity item as the moderator, controlling for initial plan quality and including a random intercept for child. The interaction between feedback condition and each receptivity item is examined to assess whether the moderation effect varies across different dimensions of receptivity.
@@ -2080,31 +2206,96 @@ item_labels <- c("Experiential Attitudes", "Instrumental Attitudes",
 item_models <- purrr::map(items, function(item) {
   item_c <- paste0(item, "_c")
   f <- as.formula(paste0(
-    "revised_pq ~ feedback_condition * ", item_c, " + initial_pq_c + (1 | child_id)"
+  "revised_pq ~ + initial_pq_c + initial_pq_mean_child + feedback_condition * ", item_c, " + (1 | child_id)"
   ))
   lmerTest::lmer(f, data = merged_data)
-}) |> 
+  }) |> 
   setNames(item_labels)
 
 purrr::walk(item_models, ~ print(summary(.x)))
 ```
 
 
-```{r exploratory-RQ3-table}
-# Render a summary table of the exploratory item-level moderation analysis results for each receptivity item using the sjPlot package. The table includes estimates, standard errors, t-values, p-values, and confidence intervals for each predictor in the four models, allowing for a side-by-side comparison of the moderation effects across different dimensions of receptivity.
-sjPlot::tab_model(
-  item_models[[1]], item_models[[2]], item_models[[3]], item_models[[4]],
-  title = "Exploratory Item-Level Moderation Analysis of Receptivity",
-  dv.labels = item_labels,
-  CSS = list(
-    css.caption = "font-weight:normal; text-align:left; color:#888888;"
-  )
+```{r exploratory-RQ3-table, tab.cap="Exploratory Item-Level Moderation Analysis of Receptivity"}
+# Side-by-side comparison of the four exploratory item-level moderation models, rendered with the same gt() pipeline. Each model corresponds to one receptivity item, and the table allows for a direct comparison of the fixed effects across the different dimensions of receptivity.
+combine_lmm_tables <- function(models, model_names, term_labels) {
+  tables <- purrr::map2(models, model_names, function(model, model_name) {
+    extract_lmm_table(model, term_labels) |>
+      dplyr::filter(Group == "Fixed Effects") |>
+      dplyr::transmute(
+        Effect,
+        "{model_name}__est" := paste0(Estimate, " [", LL, ", ", UL, "]"),
+        "{model_name}__p"   := p
+      )
+  })
+
+  purrr::reduce(tables, dplyr::full_join, by = "Effect")
+}
+
+render_lmm_comparison_gt <- function(table_data, model_names, caption) {
+  gt_tab <- table_data |>
+    gt(rowname_col = "Effect") |>
+    tab_caption(caption = caption) |>
+    sub_missing(missing_text = "") |>
+    opt_table_font(font = "Times New Roman") |>
+    cols_width(Effect ~ px(220), everything() ~ px(150)) |>
+    tab_style(style = cell_text(indent = px(20), align = "left"), locations = cells_stub()) |>
+    tab_options(
+      data_row.padding = px(8),
+      column_labels.border.top.style = "solid", column_labels.border.top.width = px(1),
+      column_labels.border.top.color = "black",
+      column_labels.border.bottom.style = "solid", column_labels.border.bottom.width = px(1),
+      column_labels.border.bottom.color = "black",
+      table_body.border.bottom.style = "solid", table_body.border.bottom.width = px(1),
+      table_body.border.bottom.color = "black",
+      stub.border.style = "none"
+    )
+
+  for (model_name in model_names) {
+    gt_tab <- gt_tab |>
+      cols_label(
+        !!rlang::sym(paste0(model_name, "__est")) := md("*b* [95% CI]"),
+        !!rlang::sym(paste0(model_name, "__p"))   := md("*p*")
+      ) |>
+      tab_spanner(label = model_name, columns = tidyselect::starts_with(paste0(model_name, "__")))
+  }
+  gt_tab
+}
+
+item_model_labels <- c(
+  "Intercept" = "Intercept",
+  "feedback_conditiondialogic" = "Feedback Condition (Dialogic)",
+  "initial_pq_c" = "Initial Plan Quality (Centered)",
+  "initial_pq_mean_child" = "Initial Plan Quality (Child Mean)",
+  "recep_q1_c" = "Receptivity Item (Centered)",
+  "recep_q2_c" = "Receptivity Item (Centered)",
+  "recep_q3_c" = "Receptivity Item (Centered)",
+  "recep_q4_r_c" = "Receptivity Item (Centered)",
+  "feedback_conditiondialogic:recep_q1_c" = "Feedback Condition × Receptivity Item",
+  "feedback_conditiondialogic:recep_q2_c" = "Feedback Condition × Receptivity Item",
+  "feedback_conditiondialogic:recep_q3_c" = "Feedback Condition × Receptivity Item",
+  "feedback_conditiondialogic:recep_q4_r_c" = "Feedback Condition × Receptivity Item"
+)
+
+table_item_models <- combine_lmm_tables(
+  models = item_models,
+  model_names = item_labels,
+  term_labels = item_model_labels
+)
+render_lmm_comparison_gt(
+  table_item_models,
+  model_names = item_labels,
+  caption = "Exploratory Item-Level Moderation Analysis of Receptivity"
 )
 ```
 
 
 ```{r exploratory-RQ3-holm-table}
 # Extract interaction p-values from the item-level moderation models and create a table with Holm-adjusted p-values to account for multiple comparisons. This provides a more conservative assessment of the significance of the interaction effects across the four receptivity items.
+interaction_p <- sapply(item_models, function(m) {
+  s <- summary(m)$coefficients
+  s[grep(":", rownames(s)), "Pr(>|t|)"]
+})
 tibble(
   Predictor = item_labels,
   `$p$ (raw)` = format_p(interaction_p),
@@ -2112,6 +2303,7 @@ tibble(
 ) |>
   knitr::kable(caption = "Holm-Corrected Interaction p-Values for Item-Level Moderation")
 ```
+- check again why holm adjustion is 1 for all --> error?
 
 # Extract Tables and Figures
 
@@ -2147,6 +2339,8 @@ for (i in seq_along(tables)) {
 
 # Appendix: Model Diagnostics
 
+In the following sections, the assumption checks for each of the main analyses are presented. These checks include assessments of linearity, normality of residuals, homoscedasticity, and multicollinearity, as well as checks for the proportional odds assumption in the ordinal model. The results of these diagnostics inform the robustness and validity of the statistical models used in the analyses.
+
 ## H1: Linear Mixed Model
 ```{r RQ1-assumptions}
 # Full assumption-check battery for H1 (see helper-function-lmm-assumptions).
@@ -2181,36 +2375,33 @@ check_lmm_assumptions(model_h3, model_label = "Children (H3)")
 
 ## Robustness Check RQ1: Ordinal Model
 ```{r robust-RQ1-assumptions}
-# Check for proportional odds assumption in the cumulative link mixed model (CLMM) by fitting a separate model with interaction terms and performing a likelihood ratio test to compare the models. A non-significant result indicates that the proportional odds assumption holds, suggesting that the relationship between predictors and the ordinal outcome is consistent across all levels of the outcome variable.
-po_test <- clm_check_h1 <- clm(
-  factor(revised_pq, levels = 0:5, ordered = TRUE) ~ feedback_condition * initial_pq_c, 
-  data = merged_data
+# Check for proportional odds assumption using the same fixed-effects structure as clmm_model
+po_test <- clm(
+  plan_quality ~ feedback_condition * time_point,
+  data = ordinal_data
 )
 po_test_result <- Anova(po_test, type = "III")
 print(po_test_result)
 
-# Check for empty cells in the contingency table of feedback condition and revised plan quality to ensure that there are sufficient observations in each group for reliable analysis. This helps identify potential issues with sparse data that could affect the validity of the model estimates.
-contingency_table <- table(merged_data$feedback_condition, merged_data$revised_pq)
+# Check for empty cells in the feedback_condition x time_point design against plan_quality, to
+# ensure sufficient observations per cell for reliable estimation. Mirrors clmm_model's fixed effects.
+contingency_table <- table(
+  interaction(ordinal_data$feedback_condition, ordinal_data$time_point),
+  ordinal_data$plan_quality
+)
 empty_cells <- sum(contingency_table == 0)
-total_cells <- length(contingency_table) 
+total_cells <- length(contingency_table)
 
-# Print the number of empty cells and the total number of cells in the contingency table to assess the adequacy of the data for analysis. A low number of empty cells relative to the total number of cells indicates that the data is sufficiently populated for reliable statistical inference.
-cell_counts_h1 <- table(merged_data$feedback_condition, merged_data$revised_pq)
-print("Cross-tabulation for RQ1 Groups:")
-print(cell_counts_h1)
+print("Cross-tabulation for RQ1 Groups (Feedback Condition x Time Point):")
+print(contingency_table)
 
-
-# Check for multicollinearity in the cumulative link mixed model (CLMM) by calculating the variance inflation factor (VIF) for the predictors. A VIF value greater than 5 indicates potential multicollinearity issues, which can affect the stability and interpretability of the model estimates.
-vif_data_clmm <- merged_data |> 
-  dplyr::select(
-    revised_pq,
-    feedback_condition,
-    initial_pq_c
-  ) |> 
+# Check for multicollinearity in the fixed effects of clmm_model (VIF only depends on the predictor
+# matrix, so the linear proxy model just needs matching predictors). VIF > 5 indicates a concern.
+vif_data_clmm <- ordinal_data |> 
+  dplyr::select(plan_quality, feedback_condition, time_point) |> 
   na.omit()
-vif_model_clmm <- lm(revised_pq ~ feedback_condition * initial_pq_c, data = vif_data_clmm)
+vif_model_clmm <- lm(as.numeric(plan_quality) ~ feedback_condition * time_point, data = vif_data_clmm)
 vif(vif_model_clmm)
-
 ```
 
 # Session Info
