@@ -60,8 +60,8 @@ Hypotheses Testing
 - Table \@ref(tab:RQ1-anova-trial-output): Model Comparison of trial random effect with Likelihood Ratio Test
 - Table \@ref(tab:RQ1-anova-initial-pq-output): Model Comparison of initial plan quality with Likelihood Ratio Test
 - Table \@ref(tab:RQ1-visualization-table): Linear Mixed Model (H1)
-- Table \@ref(tab:H2-1-visualization): Mediation Model of Perceived Helpfulness on Plan Quality Improvement (H2.1)
-- Table \@ref(tab:H2-2-visualization): Mediation Model of Perceived Motivation on Plan Quality Improvement (H2.2)
+- Table \@ref(tab:H2-1-visualization): Mediation Model of Perceived Helpfulness on Plan Quality Revision (H2.1)
+- Table \@ref(tab:H2-2-visualization): Mediation Model of Perceived Motivation on Plan Quality Revision (H2.2)
 - Table \@ref(tab:RQ3-visualization-table): Linear Mixed Model with Moderator Effect (H3)
 
 Additional Analyses
@@ -1092,8 +1092,7 @@ shapiro_table_h3 |>
 - Perceived Helpfulness (*W* = `r fmt(shapiro_help$statistic, 3)`,
 *p* `r format_p(shapiro_help$p.value)`) and Perceived Motivation
 (*W* = `r fmt(shapiro_moti$statistic, 3)`, *p* `r format_p(shapiro_moti$p.value)`)
-significantly deviated from a normal distribution. Therefore a Wilcoxon signed-rank test
-  will be performed.
+significantly deviated from a normal distribution. Therefore a Wilcoxon signed-rank test will be performed.
 
 
 
@@ -1176,7 +1175,7 @@ wilcox_table_h3 |>
 *Note.* Perceived Helpfulness and Perceived Motivation are compared
 between dialogic feedback and instructive feedback conditions.
 
-- Wilcoxon signed-rank test revealed a statistically significant
+- Wilcoxon signed-rank test revealed no statistically significant
   difference between conditions for perceived helpfulness and perceived
   motivation.
 
@@ -1636,7 +1635,7 @@ descriptions = c(
   "Path b (Helpfulness -> Revised Quality)",
   "Indirect Effect (IDE)", "Direct Effect (DE / Path c')", "Total Effect (TE)"
 ))
-render_mediation_kbl(table_h2_1, caption = "Mediation Model of Perceived Helpfulness on Plan Quality Improvement (H2.1)")
+render_mediation_kbl(table_h2_1, caption = "Mediation Model of Perceived Helpfulness on Plan Quality Revision (H2.1)")
 ```
 
 *Note.* Instructive feedback serves as the reference category for
@@ -1701,8 +1700,7 @@ table_h2_2 <- extract_mediation_table(fit_h22, descriptions = c(
   "Path b (Motivation -> Revised Quality)",
   "Indirect Effect (IDE)", "Direct Effect (DE / Path c')", "Total Effect (TE)"
 ))
-render_mediation_kbl(table_h2_2, caption = "Mediation Model of Perceived Motivation on Plan Quality
-Improvement (H2.2)")
+render_mediation_kbl(table_h2_2, caption = "Mediation Model of Perceived Motivation on Plan Quality Revision (H2.2)")
 ```
 
 
@@ -2046,7 +2044,8 @@ knitr::kable(
 *Note.* Results are based on a one-way repeated measures analysis of
 variance evaluating the effect of trial ID on initial plan quality.
 Because trial_id has 6 levels, Mauchly's test for sphericity was
-conducted; *F*, *p*, and η²_G are Greenhouse-Geisser corrected wherever
+conducted, *W* = `r fmt(summary(anova_initial)$sphericity.tests[1, "Test statistic"])`,
+*p* `r format_p(summary(anova_initial)$sphericity.tests[1, "p-value"])`; *F*, *p*, and η²_G are Greenhouse-Geisser corrected wherever
 sphericity was violated (ε < 1), as reflected in the ε (GG) column.
 
 
@@ -2075,9 +2074,9 @@ knitr::kable(
 *Note.* Results are based on a one-way repeated measures analysis of
 variance evaluating the effect of trial ID on revised plan quality.
 Because trial_id has 6 levels, Mauchly's test for sphericity was
-conducted; *F*, *p*, and η²_G are Greenhouse-Geisser corrected wherever
+conducted, *W* = `r fmt(summary(anova_revised)$sphericity.tests[1, "Test statistic"])`,
+*p* `r format_p(summary(anova_revised)$sphericity.tests[1, "p-value"])`; *F*, *p*, and η²_G are Greenhouse-Geisser corrected wherever
 sphericity was violated (ε < 1), as reflected in the ε (GG) column.
-
 
 
 # Robustness Check RQ3
@@ -2291,7 +2290,6 @@ render_lmm_comparison_gt(
 )
 ```
 
-
 Holm-adjusted p-values to account for multiple comparisons across the four receptivity items.
 
 ```{r exploratory-RQ3-holm-table}
@@ -2315,7 +2313,7 @@ tibble(
 tables <- list(
   list(data = descriptives_table, caption = "Descriptive Statistics by Feedback Condition"),
   list(data = table_h1, caption = "Linear Mixed Model (H1)"),
-  list(data = table_h2_1, caption = "Mediation Model of Perceived Helpfulness on Plan Quality Improvement (H2.1)")
+  list(data = table_h2_1, caption = "Mediation Model of Perceived Helpfulness on Plan Quality Revision (H2.1)")
   # weitere Tabellen hier ergänzen:
   # list(data = table_h2, caption = "..."),
 )
