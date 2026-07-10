@@ -1522,25 +1522,22 @@ effect_sizes_h1$r2_conditional   # variance explained by fixed + random effects
 effect_sizes_h1$per_predictor    # semi-partial R² and f² per predictor
 ```
 
-
 ```{r RQ1-visualization-table}
 # Create a summary table of the linear mixed model results for H1, including estimates, standard errors, t-values, p-values, and confidence intervals for each predictor. The table is formatted for publication using the gt package.
 table_h1 <- extract_lmm_table(model_h1,c(
   "Intercept" = "Intercept",
   "feedback_conditiondialogic" = "Feedback Condition (Dialogic)",
-  "initial_pq_c" = "Initial PQ (Centered)",
-  "initial_pq_mean_child" = "Initial PQ (Child Mean)"
+  "initial_pq_c" = "Initial PQ (Trial-Level)",
+  "initial_pq_mean_child" = "Initial PQ (Child-Level)"
 ))
 render_lmm_gt(table_h1, caption = "Linear Mixed Model (H1)")
 ```
-
 *Note.* <i>N</i> = `r n_children_after` children, total observations =
 `r n_trials_after` trials. Instructive feedback serves as the reference
 category for feedback condition. PQ = Plan Quality. CI = confidence interval; <i>LL</i> =
-lower limit; <i>UL</i> = upper limit. R²m =
-`r fmt(effect_sizes_h1$r2_marginal, 3)`, R²c =
-`r fmt(effect_sizes_h1$r2_conditional, 3)`.
-
+lower limit; <i>UL</i> = upper limit. 
+R²m = `r fmt(effect_sizes_h1$r2_marginal, 3)`, 
+R²c = `r fmt(effect_sizes_h1$r2_conditional, 3)`.
 
 
 ```{r RQ1-visualization-plot, fig.cap="Estimated Marginal Means of Revised Plan Quality by Feedback Condition"}
@@ -1762,8 +1759,8 @@ table_h3 <- extract_lmm_table(model_h3, c(
   "Intercept" = "Intercept",
   "feedback_conditiondialogic" = "Feedback Condition (Dialogic)",
   "receptivity_c" = "Feedback Receptivity (Centered)",
-  "initial_pq_c" = "Initial PQ (Centered)",
-  "initial_pq_mean_child" = "Initial PQ (Child Mean)",
+  "initial_pq_c" = "Initial PQ (Trial-Level)",
+  "initial_pq_mean_child" = "Initial PQ (Child-Level)",
   "feedback_conditiondialogic:receptivity_c" = "Feedback Condition × Receptivity"
 ))
 render_lmm_gt(table_h3, caption = "Linear Mixed Model with Moderator Effect (H3)")
@@ -2402,7 +2399,9 @@ tables <- list(
   list(data = descriptives_table, caption = "Descriptive Statistics by Feedback Condition"),
   list(data = table_h1, caption = "Linear Mixed Model (H1)"),
   list(data = table_h2_1, caption = "Mediation Model of Perceived Helpfulness on Plan Quality Revision (H2.1)"), 
-  list(data = table_h2_2, caption = "Mediation Model of Perceived Motivation on Plan Quality Revision (H2.1)")
+  list(data = table_h2_2, caption = "Mediation Model of Perceived Motivation on Plan Quality Revision (H2.1)"), 
+   list(data = table_clmm_full, caption = "Results of the Cumulative Link Mixed Model for Plan Quality")
+  
   # weitere Tabellen hier ergänzen:
   # list(data = table_h2, caption = "..."),
 )
