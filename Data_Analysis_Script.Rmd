@@ -69,6 +69,7 @@ Additional Analyses
 - Table \@ref(tab:robust-RQ1-visualization): Results of the Cumulative Link Mixed Model for Plan Quality
 - Table \@ref(tab:trial-anova-initial-table): Repeated Measures Anova for Initial Plan Quality across Trials
 - Table \@ref(tab:trial-anova-revised-table): Repeated Measures Anova for Revised Plan Quality across Trials
+- Table \@ref(tab:scenario-anova-initial-table): Repeated Measures Anova for Initial Plan Quality across Scenarios
 - Table \@ref(tab:robustness-check-RQ3-visualization): Model Comparison Receptivity: Original vs. Robustness Check (3-item)
 - Table \@ref(tab:exploratory-RQ3-table): Exploratory Item-Level Moderation Analysis of Receptivity
 
@@ -1961,7 +1962,6 @@ long_data <- merged_data |>
                             "initial_pq" ~ "Initial Plan",
                             "revised_pq" ~ "Revised Plan"))
 
-
 summary_data <- long_data |> 
   group_by(trial_id, time) |> 
   summarise(mean_pq = mean(planquality, na.rm = TRUE),
@@ -1974,6 +1974,8 @@ ggplot(summary_data, aes(x = as.numeric(trial_id), y = mean_pq, color = time, gr
   geom_point(size = 3) +
   geom_errorbar(aes(ymin = mean_pq - se_pq, ymax = mean_pq + se_pq), width = 0.1) +
   scale_x_continuous(breaks = 1:6) + 
+  # y-axis anchored at 0 for an undistorted comparison of mean plan quality
+  scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.05))) +
   labs(title = "Trends in plan quality across the six trials",
        x = "Trial ID",
        y = "Average plan quality (with standard error)",
@@ -2072,9 +2074,94 @@ knitr::kable(
 variance evaluating the effect of trial ID on revised plan quality.
 Because trial_id has 6 levels, Mauchly's test for sphericity was
 conducted, *W* = `r fmt(summary(anova_revised)$sphericity.tests[1, "Test statistic"])`,
-*p* `r format_p(summary(anova_revised)$sphericity.tests[1, "p-value"])`; *F*, *p*, and η²_G are Greenhouse-Geisser corrected wherever
-sphericity was violated (ε < 1), as reflected in the ε (GG) column.
+*p* `r format_p(summary(anova_revised)$sphericity.tests[1, "p-value"])`; *F*, *p*, and η²_G are Greenhouse-Geisser corrected wherever sphericity was violated (ε < 1), as reflected in the ε (GG) column.
 
+______________________________
+## Distribution of Plan Quality across Scenarios
+
+The next step will be to examine how the quality of the plans varies across the scenarios as possible explanatory factor. 
+
+```{r plan-quality-across-scenarios, fig.cap="Distribution of Plan Quality across Scenarios"}
+summary_data_scenario <- long_data |>
+  left_join(merged_data |> select(child_id, trial_id, scen_id, scen_name),
+            by = c("child_id", "trial_id")) |>
+  group_by(scen_name, time) |>
+  summarise(mean_pq = mean(planquality, na.rm = TRUE),
+            se_pq = sd(planquality, na.rm = TRUE) / sqrt(n()),
+            .groups = 'drop')
+
+ggplot(summary_data_scenario, aes(x = scen_name, y = mean_pq, color = time, group = time)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = mean_pq - se_pq, ymax = mean_pq + se_pq), width = 0.1) +
+  scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.05))) +
+  labs(title = "Plan quality by scenario",
+       x = "Scenario",
+       y = "Average plan quality (with standard error)",
+       color = "Time") +
+  theme_thesis() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1),
+        plot.margin = margin(t = 5.5, r = 5.5, b = 5.5, l = 20)) +
+  coord_cartesian(clip = "off")
+```
+
+**Inferential Test for Scenario ID**
+
+```{r scenario-rmAnova}
+# Perform repeated measures ANOVA for initial_pq across scenarios using the aov_ez function from the afex package. This analysis will assess whether there are significant differences in plan quality based on scenario id, while accounting for the repeated measures design with child_id as the subject identifier.
+anova_initial_scenario <- aov_ez(id = "child_id",
+                                  dv = "initial_pq",
+                                  within = "scen_id",
+                                  data = merged_data)
+
+summary(anova_initial_scenario)
+
+summary(anova_initial_scenario)$sphericity.tests
+summary(anova_initial_scenario)$pval.adjustments
+gg_eps_initial_scenario <- summary(anova_initial_scenario)$pval.adjustments[1, "GG eps"]
+
+pairs(emmeans(anova_initial_scenario, "scen_id"), adjust = "bonferroni")
+```
+
+
+```{r scenario-anova-initial-table, include=FALSE}
+# Extract ANOVA results for initial_pq. F, p, and ges are already Greenhouse-Geisser corrected by afex whenever sphericity is violated; the epsilon (GG) column below makes that correction visible (see scenario-rmAnova for the underlying Mauchly's test).
+anova_initial_scenario_summary <- as.data.frame(anova_initial_scenario$anova_table) |>
+  tibble::rownames_to_column("Effect") |>
+  dplyr::transmute(
+    Effect,
+    `$F$` = fmt(`F`),
+    `$p$` = format_p(`Pr(>F)`),
+    `$\\eta^2_G$` = fmt(ges, digits = 2),
+    `$\\varepsilon_{GG}$` = fmt(gg_eps_initial_scenario, digits = 2)
+  ) |>
+  dplyr::select(Effect, `$F$`, `$p$`, `$\\eta^2_G$`, `$\\varepsilon_{GG}$`)
+
+knitr::kable(
+  anova_initial_scenario_summary,
+  caption = "Repeated Measures Anova for Initial Plan Quality across Scenarios"
+) |>
+  kable_classic(full_width = FALSE, html_font = "Times New Roman") |>
+  column_spec(1:5, extra_css = "padding: 10px;") |>
+  row_spec(0, extra_css = "text-align: center;")
+```
+
+*Note*. Results are based on a one-way repeated measures analysis of variance evaluating the effect of scenario ID on revised plan quality.
+Because scenario has 6 levels, Mauchly's test for sphericity was conducted, *W* = `r fmt(summary(anova_initial_scenario)$sphericity.tests[1, "Test statistic"])`,
+*p* `r format_p(summary(anova_initial_scenario)$sphericity.tests[1, "p-value"])`; *F*, *p*, and η²_G are Greenhouse-Geisser corrected wherever sphericity was violated (ε < 1), as reflected in the ε (GG) column.
+
+
+
+
+
+
+
+
+
+
+
+
+____________________________
 
 # Robustness Check RQ3
 
