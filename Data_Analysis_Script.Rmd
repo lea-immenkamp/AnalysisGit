@@ -74,7 +74,6 @@ Additional Analyses
 - Table \@ref(tab:exploratory-RQ3-table): Exploratory Item-Level Moderation Analysis of Receptivity
 
 
-
 -----------------------------Extra listing when I received the rubric rating (to be included)-----------------------------
 - [Table 4: Distribution Scores for Initial and Revised Plan Quality](#tab-4)
 - [Table 5: Reliability and Normality Test for the five Rubrics](#tab-5)
@@ -90,13 +89,15 @@ Distribution
 - Figure \@ref(fig:visualization-perception): Distribution of Perceived Helpfulness and Motivation
 - Figure \@ref(fig:visualization-receptivity-plot): Distribution of Baseline Receptivity Items and Total Score
 
+
 Hypotheses Testing
 
 - Figure \@ref(fig:RQ1-visualization): Estimated Marginal Means of Revised Plan Quality by Feedback Condition
 
 Additional Analyses
 
-- Figure \@ref(fig:plan-quality-across-trials): Distribution of Plan Quality across Trials
+- Figure \@ref(fig:plan-quality-across-trials): Trend in Plan Quality across Trials
+- Figure \@ref(fig:plan-quality-across-scenarios): Plan Quality across Scenarios
 
 
 -----------------------------Extra listing-----------------------------
@@ -1950,7 +1951,7 @@ be to examine how the quality of the plans varies across the trials as
 possible explanatory factor.
 
 
-```{r plan-quality-across-trials, fig.cap="Distribution of Plan Quality across Trials"}
+```{r plan-quality-across-trials, fig.cap="Trend in Plan Quality across Trials"}
 # Prepare data for visualization by selecting relevant columns, reshaping the data to long format, and recoding time point labels for clarity. This allows for the examination of trends in plan quality across the six trials, facilitating the creation of a line plot to visualize average plan quality and standard errors at each trial and time point.
 long_data <- merged_data |> 
   select(child_id, trial_id, initial_pq, revised_pq) |> 
@@ -1976,11 +1977,11 @@ ggplot(summary_data, aes(x = as.numeric(trial_id), y = mean_pq, color = time, gr
   scale_x_continuous(breaks = 1:6) + 
   # y-axis anchored at 0 for an undistorted comparison of mean plan quality
   scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.05))) +
-  labs(title = "Trends in plan quality across the six trials",
-       x = "Trial ID",
+  labs(x = "Trial ID",
        y = "Average plan quality (with standard error)",
        color = "Time") +
-  theme_thesis()
+  theme_thesis() +
+  theme(legend.position = "right")
 ```
 
 **Inferential Test for Trial ID**
@@ -2076,12 +2077,11 @@ Because trial_id has 6 levels, Mauchly's test for sphericity was
 conducted, *W* = `r fmt(summary(anova_revised)$sphericity.tests[1, "Test statistic"])`,
 *p* `r format_p(summary(anova_revised)$sphericity.tests[1, "p-value"])`; *F*, *p*, and η²_G are Greenhouse-Geisser corrected wherever sphericity was violated (ε < 1), as reflected in the ε (GG) column.
 
-______________________________
 ## Distribution of Plan Quality across Scenarios
 
 The next step will be to examine how the quality of the plans varies across the scenarios as possible explanatory factor. 
 
-```{r plan-quality-across-scenarios, fig.cap="Distribution of Plan Quality across Scenarios"}
+```{r plan-quality-across-scenarios, fig.cap="Plan Quality across Scenarios"}
 summary_data_scenario <- long_data |>
   left_join(merged_data |> select(child_id, trial_id, scen_id, scen_name),
             by = c("child_id", "trial_id")) |>
@@ -2095,19 +2095,19 @@ ggplot(summary_data_scenario, aes(x = scen_name, y = mean_pq, color = time, grou
   geom_point(size = 3) +
   geom_errorbar(aes(ymin = mean_pq - se_pq, ymax = mean_pq + se_pq), width = 0.1) +
   scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.05))) +
-  labs(title = "Plan quality by scenario",
-       x = "Scenario",
+  labs(x = "Scenario",
        y = "Average plan quality (with standard error)",
        color = "Time") +
   theme_thesis() +
   theme(axis.text.x = element_text(angle = 30, hjust = 1),
         plot.margin = margin(t = 5.5, r = 5.5, b = 5.5, l = 20)) +
-  coord_cartesian(clip = "off")
+  coord_cartesian(clip = "off") +
+  theme(legend.position = "right")
 ```
 
 **Inferential Test for Scenario ID**
 
-```{r scenario-rmAnova}
+```{r scenario-rmAnova, include=FALSE}
 # Perform repeated measures ANOVA for initial_pq across scenarios using the aov_ez function from the afex package. This analysis will assess whether there are significant differences in plan quality based on scenario id, while accounting for the repeated measures design with child_id as the subject identifier.
 anova_initial_scenario <- aov_ez(id = "child_id",
                                   dv = "initial_pq",
@@ -2124,7 +2124,7 @@ pairs(emmeans(anova_initial_scenario, "scen_id"), adjust = "bonferroni")
 ```
 
 
-```{r scenario-anova-initial-table, include=FALSE}
+```{r scenario-anova-initial-table}
 # Extract ANOVA results for initial_pq. F, p, and ges are already Greenhouse-Geisser corrected by afex whenever sphericity is violated; the epsilon (GG) column below makes that correction visible (see scenario-rmAnova for the underlying Mauchly's test).
 anova_initial_scenario_summary <- as.data.frame(anova_initial_scenario$anova_table) |>
   tibble::rownames_to_column("Effect") |>
@@ -2150,6 +2150,83 @@ knitr::kable(
 Because scenario has 6 levels, Mauchly's test for sphericity was conducted, *W* = `r fmt(summary(anova_initial_scenario)$sphericity.tests[1, "Test statistic"])`,
 *p* `r format_p(summary(anova_initial_scenario)$sphericity.tests[1, "p-value"])`; *F*, *p*, and η²_G are Greenhouse-Geisser corrected wherever sphericity was violated (ε < 1), as reflected in the ε (GG) column.
 
+____________________________________________________________________________
+
+## Mixed Anova: Time (Initial vs. Revised Plan Quality) x Gender
+
+```{r mixed-anova-gender, include=FALSE}
+# Reshape to long format for the mixed ANOVA: time (initial vs. revised plan quality) is the within-subjects factor, gender is the between-subjects factor.
+long_data_gender <- merged_data |>
+  select(child_id, gender, initial_pq, revised_pq) |>
+  pivot_longer(cols = c(initial_pq, revised_pq),
+               names_to = "time",
+               values_to = "planquality") |>
+  mutate(
+    time = recode_values(time,
+                       "initial_pq" ~ "Initial Plan",
+                       "revised_pq" ~ "Revised Plan"),
+   gender = dplyr::recode(as.character(gender),
+                        "1" = "Male", "2" = "Female", "3" = "Other") |>
+     factor() |>
+     droplevels()
+  )
+
+
+# Mixed ANOVA: time (within) x gender (between) on plan quality. Tests whether the initial-to-revised improvement differs by gender (interaction), in addition to main effects of time and gender.
+anova_gender <- aov_ez(id = "child_id",
+                        dv = "planquality",
+                        within = "time",
+                        between = "gender",
+                        data = long_data_gender)
+
+summary(anova_gender)
+
+# Follow-up pairwise comparisons, only meaningful to inspect closely if the main effect of gender or the time:gender interaction is significant.
+pairs(emmeans(anova_gender, ~ gender | time), adjust = "bonferroni")
+pairs(emmeans(anova_gender, ~ time | gender), adjust = "bonferroni")
+```
+
+
+```{r mixed-anova-gender-table}
+# Extract all three effects (time, gender, time:gender) in one APA-style table.
+anova_gender_summary <- as.data.frame(anova_gender$anova_table) |>
+  tibble::rownames_to_column("Effect") |>
+  dplyr::transmute(
+    Effect,
+    `$df$` = paste(fmt(`num Df`, digits = 0), fmt(`den Df`, digits = 0), sep = ", "),
+    `$F$` = fmt(`F`),
+    `$p$` = format_p(`Pr(>F)`),
+    `$\\eta^2_G$` = fmt(ges, digits = 2)
+  )
+
+knitr::kable(
+  anova_gender_summary,
+  caption = "Mixed ANOVA of Plan Quality by Time and Gender"
+) |>
+  kable_classic(full_width = FALSE, html_font = "Times New Roman") |>
+  column_spec(1:5, extra_css = "padding: 10px;") |>
+  row_spec(0, extra_css = "text-align: center;")
+
+
+summary_data_gender <- long_data_gender |>
+  group_by(gender, time) |>
+  summarise(mean_pq = mean(planquality, na.rm = TRUE),
+            se_pq = sd(planquality, na.rm = TRUE) / sqrt(n()),
+            .groups = 'drop')
+```
+
+```{r mixed-anova-gender-figure, fig.cap="Mixed Anova of Plan Quality"}
+ggplot(summary_data_gender, aes(x = time, y = mean_pq, color = gender, group = gender)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = mean_pq - se_pq, ymax = mean_pq + se_pq), width = 0.1) +
+  scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.05))) +
+  labs(x = "Time",
+       y = "Average plan quality (with standard error)",
+       color = "Gender") +
+  theme_thesis() +
+  theme(legend.position = "right")
+```
 
 
 
@@ -2158,12 +2235,9 @@ Because scenario has 6 levels, Mauchly's test for sphericity was conducted, *W* 
 
 
 
+____________________________________________________________________________
 
-
-
-____________________________
-
-# Robustness Check RQ3
+## Robustness Check RQ3
 
 - To examine the robustness of the receptivity scale's internal
   consistency, a reliability analysis was conducted on the four items
