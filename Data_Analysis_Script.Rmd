@@ -27,7 +27,7 @@ analyze the study data. The code is structured to be clear and
 reproducible, with comments explaining the process. The analysis focuses
 on understanding how different types of AI feedback (instructive vs.
 dialogic) influence children’s plan quality improvement, motivation and
-perceived helpfulness, while accounting for their reception of the
+perceived helpfulness, while accounting for their receptivity of the
 feedback.
 
 
@@ -59,17 +59,19 @@ Hypotheses Testing
 
 - Table \@ref(tab:RQ1-anova-trial-output): Model Comparison of trial random effect with Likelihood Ratio Test
 - Table \@ref(tab:RQ1-anova-initial-pq-output): Model Comparison of initial plan quality with Likelihood Ratio Test
-- Table \@ref(tab:RQ1-visualization-table): Linear Mixed Model (H1)
-- Table \@ref(tab:H2-1-visualization): Mediation Model of Perceived Helpfulness on Plan Quality Revision (H2.1)
-- Table \@ref(tab:H2-2-visualization): Mediation Model of Perceived Motivation on Plan Quality Revision (H2.2)
-- Table \@ref(tab:RQ3-visualization-table): Linear Mixed Model with Moderator Effect (H3)
+- Table \@ref(tab:RQ1-visualization-table): Linear Mixed Model Predicting Revised Plan Quality from Feedback Condition (H1)
+- Table \@ref(tab:H2-1-visualization): Perceived Helpfulness as Mediator between Feedback Condition and Revised Plan Quality (H2.1)
+- Table \@ref(tab:H2-2-visualization): Perceived Motivation as Mediator between Feedback Condition and Revised Plan Quality (H2.2)
+- Table \@ref(tab:RQ3-visualization-table): Linear Mixed Model Testing the Moderating Role of Feedback Receptivity on Revised Plan Quality (H3)
+
 
 Additional Analyses
 
-- Table \@ref(tab:robust-RQ1-visualization): Results of the Cumulative Link Mixed Model for Plan Quality
+- Table \@ref(tab:robust-RQ1-visualization): Cumulative Link Mixed Model of Plan Quality as a Function of Feedback Condition and Time Point (Robustness Check for H1)
 - Table \@ref(tab:trial-anova-initial-table): Repeated Measures Anova for Initial Plan Quality across Trials
 - Table \@ref(tab:trial-anova-revised-table): Repeated Measures Anova for Revised Plan Quality across Trials
 - Table \@ref(tab:scenario-anova-initial-table): Repeated Measures Anova for Initial Plan Quality across Scenarios
+- Table \@ref(tab:mixed-anova-gender-table): Mixed Anova of Plan Quality by Time and Gender
 - Table \@ref(tab:robustness-check-RQ3-visualization): Model Comparison Receptivity: Original vs. Robustness Check (3-item)
 - Table \@ref(tab:exploratory-RQ3-table): Exploratory Item-Level Moderation Analysis of Receptivity
 
@@ -92,12 +94,14 @@ Distribution
 
 Hypotheses Testing
 
-- Figure \@ref(fig:RQ1-visualization): Estimated Marginal Means of Revised Plan Quality by Feedback Condition
+- Figure \@ref(fig:RQ1-visualization-plot): Estimated Marginal Means of Revised Plan Quality by Feedback Condition
 
 Additional Analyses
 
 - Figure \@ref(fig:plan-quality-across-trials): Trend in Plan Quality across Trials
 - Figure \@ref(fig:plan-quality-across-scenarios): Plan Quality across Scenarios
+- Figure \@ref(fig:mixed-anova-gender-figure): Plan Quality by Time and Gender
+
 
 
 -----------------------------Extra listing-----------------------------
@@ -107,17 +111,17 @@ Additional Analyses
 
 # Research Questions
 
-*RQ1:* Does the change in children’s plan quality from the initial to
+**RQ1:** Does the change in children’s plan quality from the initial to
 the revised plan differ between LLM-generated dialogic and instructive
 feedback?
 
-*RQ2:* To what extent does the perceived usefulness of LLM generated
+**RQ2:** To what extent does the perceived usefulness of LLM generated
 feedback, specifically perceived helpfulness and perceived motivation,
 mediate the relationship between feedback framing and children’s plan
 quality after revision, with the feedback being instructive vs.
 dialogic?
 
-*RQ3:* Does feedback receptivity moderate the relationship between
+**RQ3:** Does feedback receptivity moderate the relationship between
 LLM-generated instructive and dialogic feedback and the quality of the
 revised plan?
 
@@ -187,15 +191,15 @@ if (!isTRUE(renv_status$synchronized)) {
   warning(
     "renv library is out of sync with renv.lock.\n",
     "Run this once in the R console, then re-knit:\n\n",
-    "    renv::restore()\n",
+    "    renv::restore()\n", # Restores exact package versions from the committed lockfile
     call. = FALSE
   )
 }
-# Restores exact package versions from the committed lockfile
+
 ```
 
 ```{r helper-function-formatting, include=FALSE}
-# p-value formatting
+# consistent p-value formatting
 format_p <- function(p) {
   case_when(
     p < .001 ~ "< .001",
@@ -203,9 +207,14 @@ format_p <- function(p) {
   )
 }
 
-# numeric formatting
+# consistent numeric formatting
 fmt <- function(x, digits = 2) {
   sprintf(paste0("%.", digits, "f"), as.numeric(x))
+}
+
+# consistent numeric formatting
+fmt_bounded <- function(x, digits = 3) {
+  sub("^0\\.", ".", sprintf(paste0("%.", digits, "f"), as.numeric(x)))
 }
 ```
 
@@ -364,7 +373,7 @@ missing_data_table <- tibble::tibble(
   )
 )
 
-knitr::kable(
+kableExtra::kbl(
   missing_data_table, 
   caption = "Missing data",
   col.names = c("Level", "n")) |>
@@ -374,20 +383,21 @@ knitr::kable(
 
 
 - Of the original `r n_children_before` children, `r n_children_excluded`
-  (`r fmt(100 * n_children_excluded / n_children_before, 1)`%) were excluded
-  because more than `r max_missing_trials` of their `r n_distinct(merged_data_raw$scen_id)`
+  (`r fmt(100 * n_children_excluded / n_children_before, 1)`%) was excluded
+  because more than `r max_missing_trials` of its `r n_distinct(merged_data_raw$scen_id)`
   trials had missing values in initial or revised plan quality. Among the
   remaining `r n_children_after` children, an additional
   `r n_trials_dropped_from_retained_children` individual trial with missing
-  values was removed, resulting in <i>N</i> = `r n_trials_after` trials.
+  values was removed, resulting in <i>N</i> = `r n_trials_after` trials (`r n_children_after` * 6 - `r n_trials_dropped_from_retained_children`).
 
 
-```{r data-preparation}
-# Central variable preparation. All derived variables are generated here 
+```{r data-preparation, cache=TRUE}
+# Central variable preparation. All variables are centered and recoded here, so that the final dataset is ready for analysis.
 merged_data <- merged_data |> 
 
    mutate(
-    # within-person centering
+    # within-person (cluster-mean) centering
+    # subtract each child's own mean to isolate trial-to-trial variation from between-child differences
     perct_help_c = perct_help - mean(perct_help, na.rm = TRUE),
     perct_moti_c = perct_moti - mean(perct_moti, na.rm = TRUE),
     initial_pq_c = initial_pq - mean(initial_pq, na.rm = TRUE),
@@ -395,14 +405,16 @@ merged_data <- merged_data |>
   ) |>
    
   mutate (
-    # grand-mean centering
+    # between-person component (child-level mean of initial plan quality) 
     initial_pq_mean_child = mean(initial_pq, na.rm = TRUE),
     .by = child_id
   ) |> 
  
    mutate(
-    # grand-mean centering 
-    receptivity_c = receptivity - mean(receptivity, na.rm = TRUE),
+    # grand-mean centering
+    # the mean of baseline receptivity is taken on distinct child-level values first.
+    receptivity_c = receptivity - 
+      mean(distinct(pick(child_id, receptivity))$receptivity, na.rm = TRUE),
 
     # binary Dummy-coding for mediation models
     feedback_dummy = if_else(feedback_condition == "dialogic", 1, 0),
@@ -410,16 +422,17 @@ merged_data <- merged_data |>
     # 3-Item-Receptivity without reverse-coded Item 4 (which has lower reliability), for robustness check 
     receptivity_3items = rowMeans(across(c(recep_q1, recep_q2, recep_q3)), na.rm = TRUE),
 
-    # centering items for exploratory Item-Level-Moderation 
+    # grand-mean centering of individual items for exploratory item-level moderation
     across(
       c(recep_q1, recep_q2, recep_q3, recep_q4_r),
-      ~ .x - mean(.x, na.rm = TRUE),
+      ~ .x - mean(distinct(pick(child_id, all_of(cur_column())))[[cur_column()]], na.rm = TRUE),
       .names = "{.col}_c"
     )
-  ) |> 
+  )|> 
   mutate(
     # grand-mean centering for 3-item receptivity score, for robustness check. 
-    receptivity_3items_c = receptivity_3items - mean(receptivity_3items, na.rm = TRUE)
+    receptivity_3items_c = receptivity_3items - 
+      mean(distinct(pick(child_id, receptivity_3items))$receptivity_3items, na.rm = TRUE)
   )
 ```
 
@@ -444,6 +457,7 @@ merged_data <- merged_data |>
 ```
 
 ```{r helper-functions-lmm-table, include=FALSE}
+# Helper function to extract fixed and random effects from a linear mixed model (lmer) and format them into a publication-ready table. The function takes the fitted model object and a named vector of term labels for more descriptive variable names.
 extract_lmm_table <- function(model, term_labels) {
   coefs  <- summary(model)$coefficients
   ci_all <- confint(model, method = "profile")
@@ -520,7 +534,7 @@ render_lmm_gt <- function(table_data, caption, estimate_label = "b") {
 
 
 ```{r helper-function-plot-theme, include=FALSE}
-# Shared ggplot theme for all thesis figures
+# Helper function for consistent ggplot theme for all thesis figures
 theme_thesis <- function(base_size = 12, strip_face = "italic") {
   theme_minimal(base_family = "serif") +
     theme(
@@ -535,8 +549,8 @@ theme_thesis <- function(base_size = 12, strip_face = "italic") {
 
 ```{r helper-function-effect-sizes, include=FALSE}
 # Standardized effect sizes for fixed effects in a linear mixed model:
-# - Marginal/conditional R² (Nakagawa & Schielzeth, 2013): variance explained by fixed effects only vs. fixed + random effects.
-# - Semi-partial R² per fixed effect (Jaeger et al., 2016; "nsj" method, recommended for its low small-sample bias) and the corresponding Cohen's (1992) f², which quantifies the practical size of each effect's unique contribution.
+# Marginal/conditional R² (Nakagawa & Schielzeth, 2013): variance explained by fixed effects only vs. fixed + random effects.
+# Semi-partial R² per fixed effect (Jaeger et al., 2016; "nsj" method, recommended for its low small-sample bias) and the corresponding Cohen's (1992) f², which quantifies the practical size of each effect's unique contribution.
 extract_effect_sizes <- function(model) {
   r2_model <- performance::r2_nakagawa(model)
 
@@ -557,7 +571,7 @@ extract_effect_sizes <- function(model) {
 ```
 
 ```{r helper-function-mediation-table, include=FALSE}
-# Extracts mediation effects from lavaan SEM output and formats them into a publication-ready table
+# Helper function to extract mediation effects from lavaan SEM output and formats them into a publication-ready table
 extract_mediation_table <- function(fit_object, descriptions,
                                      labels = c("a", "b", "IDE", "DE", "TE")) {
   boot_estimates <- parameterEstimates(fit_object)
@@ -595,8 +609,8 @@ render_mediation_kbl <- function(table_data, caption) {
 ```
 
 ```{r helper-function-lmm-assumptions, include=FALSE}
-# Full assumption-check battery for the linear mixed models H1 and H3. Both models share the same structure (lmer, single random intercept for child_id, a mix of categorical and continuous fixed effects), so the same complete set of checks applies to both. 
-# Asummption tests that are not included in check_model() are added.
+# Helper function for full assumption-check battery for the linear mixed models H1 and H3. Both models share the same structure (lmer, single random intercept for child_id, a mix of categorical and continuous fixed effects), so the same complete set of checks applies to both. 
+# Asummption tests that are not included in check_model() (see below) are added.
 check_lmm_assumptions <- function(model, model_label, group_var = "child_id") {
   # Heteroscedasticity
   # statistical test (NCV/Breusch-Pagan-type)
@@ -635,7 +649,7 @@ check_lmm_assumptions <- function(model, model_label, group_var = "child_id") {
 ```
 
 ```{r helper-function-mediation-assumptions, include=FALSE}
-# Function to check assumptions for mediation analysis using linear models
+# Helper function to check assumptions for mediation analysis using linear models
 check_mediation_assumptions <- function(mediator_model, outcome_model) {
   # 1. Normality of residuals (visual: QQ-plots, statistical: Shapiro-Wilk test on model residuals)
   plot(check_normality(mediator_model), type = "qq")
@@ -665,11 +679,10 @@ check_mediation_assumptions <- function(mediator_model, outcome_model) {
 ```
 
 
-
 # Codebook
 
 ```{r codebook}
-# Create a codebook table for the study variables
+# Create a codebook table for the study variables to provide clear definitions and descriptions for each variable used in the analysis. This table will serve as a reference for understanding the dataset and its components.
 codebook_table <- tribble(
   ~Variable, ~Label, ~Description,
   "child_id", "Child ID", "Participant ID",
@@ -719,7 +732,6 @@ knitr::kable(
 ```
 
 # Sample Characteristics
-
 
 ```{r sample-characteristics}
 # Create a clean version of the questionnaire data that only includes participants present in the merged dataset
@@ -803,14 +815,7 @@ gain an understanding of the characteristics of the dataset.
 Spaghetti plots showing the change in plan quality from pre- to
 post-feedback, separately for instructive and dialogic feedback
 conditions. A black line depicts the median improvement within each
-feedback condition.
-
-Child-level: The first spaghetti plot includes a line for each child,
-with points representing their mean plan quality at pre- and
-post-feedback (see fig 2).
-
-Trial-level: The second spaghetti plot includes a line for each trial
-(see fig 3).
+feedback condition. Child-level (see fig 2) and trial-level (see fig 3) plots are provided to visualize the data at different levels of aggregation.
 
 
 ```{r spaghetti-plot, fig.cap="Spaghetti Plot on Child-level", warning=FALSE}
@@ -835,7 +840,7 @@ child_means <- merged_data |>
     values_to = "PlanQuality"
   ) |> 
   mutate(
-    Time = recode_values(
+    Time = case_match(
       Time,
       "initial_pq" ~ "Pre-Feedback",
       "revised_pq" ~ "Post-Feedback"
@@ -850,7 +855,7 @@ child_means <- merged_data |>
   mutate(Participant = factor(child_id))
 
 # create spaghetti plot with ggplot2
-p_pq_prepost <- ggplot(
+pq_child_level <- ggplot(
   child_means,
   aes(x = Time, y = MeanPQ, group = Participant, color = Participant)
 ) +
@@ -877,7 +882,7 @@ p_pq_prepost <- ggplot(
     y = "Plan Quality (0–5)") +
    theme_thesis() 
 
-p_pq_prepost
+pq_child_level 
 ```
 
 <small> *Note*. Each line represents a single child. Because every child
@@ -917,24 +922,25 @@ spaghetti_data <- merged_data |>
   dplyr::filter(!is.na(feedback_condition), !is.na(Plan_Quality))
 
 # create spaghetti plot with ggplot2
-p_plan_quality <- ggplot(
+pq_trial_level <- ggplot(
   spaghetti_data,
-  aes(x = Time, y = Plan_Quality, group = Trial_Group)
+  aes(x = Time, y = Plan_Quality, group = Trial_Group, color = Participant)
 ) +
-  geom_line(aes(color = Participant), alpha = 0.35, linewidth = 0.7) +
+  geom_line(alpha = 0.6, linewidth = 0.25) +
+  geom_point(size = 0.8, alpha = 0.6) +
   stat_summary(
     fun = median,
     geom = "line",
     aes(group = 1),
     color = "black",
-    linewidth = 1.8
+    linewidth = 0.8
   ) +
   stat_summary(
     fun = median,
     geom = "point",
     aes(group = 1),
     color = "black",
-    size = 2.4
+    size = 1
   ) +
   facet_wrap(~ feedback_condition, nrow = 1) +
   scale_y_continuous(breaks = 0:5, limits = c(0, 5)) +
@@ -944,7 +950,7 @@ p_plan_quality <- ggplot(
   theme_thesis() 
 
 
-p_plan_quality
+pq_trial_level
 ```
 
 <small> *Note.* Each line in the plots represents a single planning
@@ -1015,8 +1021,8 @@ ggplot(
     linewidth = 0.6
   ) +
   facet_wrap(~ Perception_Type) +
-  scale_y_continuous(breaks = 0:4) +
-  coord_cartesian(ylim = c(0, 4)) +
+  scale_y_continuous(breaks = 1:4) +
+  coord_cartesian(ylim = c(1, 4)) +
   labs(
     x = "Feedback condition",
     y = "Perception Score"
@@ -1030,6 +1036,8 @@ instructional condition. For each participant, perceived helpfulness and
 motivation ratings were first averaged across the three trials within
 each instructional condition. These aggregated within-person means were
 then used to visualize the overall distributions. </small>
+
+
 
 **Distributional Assumptions and Inferential Test for Helpfulness and
 Motivation**
@@ -1094,7 +1102,7 @@ shapiro_table_h3 |>
 - Perceived Helpfulness (*W* = `r fmt(shapiro_help$statistic, 3)`,
 *p* `r format_p(shapiro_help$p.value)`) and Perceived Motivation
 (*W* = `r fmt(shapiro_moti$statistic, 3)`, *p* `r format_p(shapiro_moti$p.value)`)
-significantly deviated from a normal distribution. Therefore a Wilcoxon signed-rank test will be performed.
+significantly deviated from a normal distribution. Therefore a Wilcoxon signed-rank test was performed.
 
 
 
@@ -1166,7 +1174,7 @@ wilcox_table_h3 <- tibble::tibble(
 # Render the Wilcoxon signed-rank test results in a publication-ready table format using kableExtra, with appropriate alignment, caption, and column names.
 wilcox_table_h3 |> 
   kbl(
-    align = c("l", "l", "c", "c", "c", "c"), 
+    align = c("l", "l", "c", "c", "c"), 
     escape = FALSE,
     caption = "Wilcoxon Signed-Rank Tests for Perceived Usefulness",
     col.names = c("Outcome", "Test", "<i>V</i>", "<i>p</i>", "Effect Size (<i>r</i>)")
@@ -1174,8 +1182,8 @@ wilcox_table_h3 |>
   kable_classic(full_width = FALSE, html_font = "Times New Roman")
 ```
 
-*Note.* Perceived Helpfulness and Perceived Motivation are compared
-between dialogic feedback and instructive feedback conditions.
+<small> *Note.* Perceived Helpfulness and Perceived Motivation are compared
+between dialogic feedback and instructive feedback conditions. </small>
 
 - Wilcoxon signed-rank test revealed no statistically significant
   difference between conditions for perceived helpfulness and perceived
@@ -1183,7 +1191,8 @@ between dialogic feedback and instructive feedback conditions.
 
 ## Distribution of Receptivity
 
-Feedback receptivity was measured prior to the planning trials.
+Feedback receptivity was measured prior to the planning trials. Ratings were collected on a 5-point Likert scale (1 =
+not at all receptive, 5 = very receptive). 
 
 ```{r visualization-receptivity, include=FALSE}
 # Prepare data for visualization of feedback receptivity items and total score by reshaping the data into a long format, allowing for the creation of violin plots to show the distribution of responses for each receptivity measure.
@@ -1237,11 +1246,8 @@ ggplot(feedback_receptivity_long, aes(x = Measure, y = Score, fill = Measure)) +
   )
 ```
 
-<small> *Note.* Ratings were collected on a 5-point Likert scale (1 =
-not at all receptive, 5 = very receptive). Feedback Receptivity
-represents the mean of the four receptivity items. Violin plots show
-response distributions and boxplots indicate medians and interquartile
-ranges. </small>
+<small> *Note.* Feedback Receptivity represents the mean of the four receptivity items. Violin plots show
+response distributions and boxplots indicate medians and interquartile ranges. </small>
 
 **Scale Reliability**
 
@@ -1379,8 +1385,8 @@ feedback?
 feedback than after instructive feedback, controlling for their initial
 plan quality.
 
-**Planned Analysis:** To test the hypothesis, a linear mixed-effects model will be fitted with revised plan quality as the dependent variable, feedback condition as the fixed effect, and initial plan quality as a covariate. A random intercept for child will be included to account for the nested structure of the data (multiple trials per child).  An additional model will be fitted including a random intercept for trial to account for potential variability across different trials. The two models will be compared using a likelihood ratio test to determine if the inclusion of the trial random effect significantly improves model fit. Estimated marginal means will be calculated to examine the effect of feedback condition on revised plan quality while controlling for initial plan quality.
-Age and gender were not entered as covariates because feedback condition was manipulated within child, making between-child confounds unlikely to explain the contrast.
+**Planned Analysis:** To test the hypothesis, a linear mixed-effects model will be fitted with revised plan quality as the dependent variable, feedback condition as the fixed effect, and initial plan quality as a covariate. A random intercept for child will be included to account for the nested structure of the data (multiple trials per child). Two additional models will be fitted including a random intercept for trial to account for potential variability across different trials and a model that decomposes initial plan quality into within-person centered and between-person mean components to account for potential confounding effects of individual differences in initial plan quality. The models will be compared using a likelihood ratio test to determine if the inclusion of the variables significantly improves model fit. Estimated marginal means will be calculated to examine the effect of feedback condition on revised plan quality while controlling for initial plan quality.
+Age and gender were not entered as covariates because feedback condition was manipulated within child, making between-child confounds unlikely to explain the contrast. 
 
 **RQ1 Results of Assumption Testing**
 
@@ -1399,16 +1405,17 @@ Age and gender were not entered as covariates because feedback condition was man
 
 **Anova for Model Comparison**
 
-- Compare models with and without random intercept for trial to determine if the inclusion of the trial random effect significantly improves model fit. If the p-value from the likelihood ratio test is greater than 0.05, the simpler model without the trial random effect will be used for further analysis.
+Models with and without random intercept for trial were compared to determine if the inclusion of the trial random effect significantly improves model fit. If the p-value from the likelihood ratio test is greater than 0.05, the simpler model without the trial random effect will be used for further analysis.
 
 **Model specification**
 
 ```{r RQ1-model-comparison-trial, results='hide', echo=TRUE}
 # fit linear mixed model to test differences between feedback conditions, control for initial plan quality and consider random intercept for child
-model_without_trial <- lmerTest::lmer(
+model_h1_raw <- lmerTest::lmer(
   revised_pq ~ feedback_condition + initial_pq + (1 | child_id),
   data = merged_data
 ) 
+
 
 # fit linear mixed model to test differences between feedback conditions, control for initial plan quality and consider random intercept for child and trial
 model_with_trial <- lmerTest::lmer(
@@ -1419,11 +1426,11 @@ model_with_trial <- lmerTest::lmer(
 
 ```{r RQ1-anova-trial, include=FALSE}
 # compare models with and without random intercept for trial
-trial_anova <- anova(model_without_trial, model_with_trial)
+trial_anova <- anova(model_h1_raw, model_with_trial)
 
 # Create a data frame to summarize the model comparison results, including AIC, BIC, Chi-squared statistic, and p-value for the likelihood ratio test. 
 comparison_trial <- data.frame(
-  Model = c("Without trial", "With trial"),
+  Model = c("Raw Model", "Controlled for trial id"),
   AIC = fmt(trial_anova$AIC),
   BIC = fmt(trial_anova$BIC),
   "Chisq" = c("", fmt(trial_anova$Chisq[2])),
@@ -1434,7 +1441,7 @@ comparison_trial <- data.frame(
 
 ```{r RQ1-anova-trial-output}
 # Render the model comparison results in a publication-ready table format using kableExtra, with appropriate alignment, caption, and column specifications. The table presents AIC, BIC, Chi-squared statistic, and p-value for the likelihood ratio test comparing models with and without the trial random effect.
-knitr::kable(
+kableExtra::kbl(
   comparison_trial,
   caption = "Model Comparison of trial random effect with Likelihood Ratio Test"
 ) |> 
@@ -1449,22 +1456,16 @@ knitr::kable(
 if ((trial_anova)$`Pr(>Chisq)`[2] > 0.05) {
   print("The model without the trial random effect is sufficient for analysis.")
 } else {
-  print("The model with the trial random effect provides a significantly better fit and will be used for analysis.")
+  print("The model with the trial random effect provides a significantly better fit and will be used for further analysis.")
 }
 ```
 
-- compare model that decompose initial plan quality into within-person centered and between-person mean components to account for potential confounding effects with model that uses raw initial plan quality as covariate. If the p-value from the likelihood ratio test is greater than 0.05, the simpler model with raw initial plan quality will be used for further analysis.
+A Model that decomposes initial plan quality into within-person centered and between-person mean components was also compared with the model that uses raw initial plan quality as covariate. If the p-value from the likelihood ratio test is greater than 0.05, the simpler model with raw initial plan quality will be used for further analysis.
 
 ```{r RQ1-model-comparison-initial-pq, results='hide', echo=TRUE}
 # Decompose initial plan quality into within-person centered and between-person mean components to account for potential confounding effects of individual differences in initial plan quality on the relationship between feedback condition and revised plan quality.
 model_h1_decomp <- lmerTest::lmer(
   revised_pq ~ feedback_condition + initial_pq_c + initial_pq_mean_child + (1 | child_id),
-  data = merged_data
-)
-
-# compare against the constrained (raw-covariate) model
-model_h1_raw <- lmerTest::lmer(
-  revised_pq ~ feedback_condition + initial_pq + (1 | child_id),
   data = merged_data
 )
 ```
@@ -1475,7 +1476,7 @@ initial_pq_anova <- anova(model_h1_decomp, model_h1_raw)
 
 # Create a data frame to summarize the model comparison results, including AIC, BIC, Chi-squared statistic, and p-value for the likelihood ratio test. 
 comparison_initial_pq <- data.frame(
-  Model = c("Raw initial plan quality", "Decomposed initial plan quality"),
+  Model = c("Raw Model", "Decomposed initial plan quality"),
   AIC = fmt(initial_pq_anova$AIC),
   BIC = fmt(initial_pq_anova$BIC),
   "Chisq" = c("", fmt(initial_pq_anova$Chisq[2])),
@@ -1486,7 +1487,7 @@ comparison_initial_pq <- data.frame(
 
 ```{r RQ1-anova-initial-pq-output}
 # Render the model comparison results in a publication-ready table format using kableExtra, with appropriate alignment, caption, and column specifications. The table presents AIC, BIC, Chi-squared statistic, and p-value for the likelihood ratio test comparing models with and without initial plan quality decomposition.
-knitr::kable(
+kableExtra::kbl(
   comparison_initial_pq,
   caption = "Model Comparison of initial plan quality with Likelihood Ratio Test"
 ) |> 
@@ -1501,19 +1502,22 @@ knitr::kable(
 if ((initial_pq_anova)$`Pr(>Chisq)`[2] > 0.05) {
   print("The model without the decomposed initial plan quality is sufficient for analysis.")
 } else {
-  print("The model with the decomposed initial plan quality provides a significantly better fit and will be used for analysis.")
+  print("The model with the decomposed initial plan quality provides a significantly better fit and will be used for further analysis.")
 }
 ```
 
-**ICC and effect sizes for final model**
 
-```{r RQ1-analysis-model-comparison-final}
+```{r RQ1-model}
 # Fit the final linear mixed-effects model for H1, using the decomposed initial plan quality as covariates and including a random intercept for child. This model will be used for further analysis and interpretation of the effects of feedback condition on revised plan quality.
 model_h1 <- lmerTest::lmer(
   revised_pq ~ feedback_condition + initial_pq_c + initial_pq_mean_child + (1 | child_id),
   data = merged_data
 )
+```
 
+**ICC and effect sizes for final model**
+
+```{r RQ1-effect-sizes}
 # Intraclass correlation coefficient to examine the proportion of variance explained by the random effect of child
 performance::icc(model_h1)
 
@@ -1524,7 +1528,8 @@ effect_sizes_h1$r2_conditional   # variance explained by fixed + random effects
 effect_sizes_h1$per_predictor    # semi-partial R² and f² per predictor
 ```
 
-```{r RQ1-visualization-table}
+
+```{r RQ1-visualization-table, message=FALSE}
 # Create a summary table of the linear mixed model results for H1, including estimates, standard errors, t-values, p-values, and confidence intervals for each predictor. The table is formatted for publication using the gt package.
 table_h1 <- extract_lmm_table(model_h1,c(
   "Intercept" = "Intercept",
@@ -1532,14 +1537,14 @@ table_h1 <- extract_lmm_table(model_h1,c(
   "initial_pq_c" = "Initial PQ (Trial-Level)",
   "initial_pq_mean_child" = "Initial PQ (Child-Level)"
 ))
-render_lmm_gt(table_h1, caption = "Linear Mixed Model (H1)")
+render_lmm_gt(table_h1, caption = "Linear Mixed Model Predicting Revised Plan Quality from Feedback Condition (H1)")
 ```
-*Note.* <i>N</i> = `r n_children_after` children, total observations =
+<small> *Note.* <i>N</i> = `r n_children_after` children, total observations =
 `r n_trials_after` trials. Instructive feedback serves as the reference
 category for feedback condition. PQ = Plan Quality. CI = confidence interval; <i>LL</i> =
 lower limit; <i>UL</i> = upper limit. 
 R²m = `r fmt(effect_sizes_h1$r2_marginal, 3)`, 
-R²c = `r fmt(effect_sizes_h1$r2_conditional, 3)`.
+R²c = `r fmt(effect_sizes_h1$r2_conditional, 3)`. </small>
 
 
 ```{r RQ1-visualization-plot, fig.cap="Estimated Marginal Means of Revised Plan Quality by Feedback Condition"}
@@ -1556,6 +1561,8 @@ emm |>
     y = "Estimated Revised Plan Quality"
   )
 ```
+<small> *Note.* Estimated marginal means of revised plan quality are adjusted for initial plan quality (trial-level and child-level) and represent the expected revised plan quality for each feedback condition. Error bars indicate 95% confidence intervals. 
+</small>
 
 ## Research Question 2
 
@@ -1577,7 +1584,7 @@ children's revised plans. Specifically, dialogic feedback will lead to a
 higher perceived motivation, than instructive feedback, which in turn
 will predict a higher plan quality after revision.
 
-**Planned Analysis:** To test these hypotheses, a mediation analysis will be conducted using the `lavaan` package. The analysis will examine the indirect effects of feedback framing on revised plan quality through perceived helpfulness and perceived motivation, while controlling for initial plan quality. Bootstrapping will be used to obtain confidence intervals for the indirect effects, given the potential violations of normality and heteroscedasticity assumptions. The mediation model will include feedback framing as the independent variable, perceived helpfulness and perceived motivation as mediators, and revised plan quality as the dependent variable. The analysis will also account for the clustered nature of the data by including a random intercept for child.
+**Planned Analysis:** To test these hypotheses, a mediation analysis will be conducted using the `lavaan` package. The analysis will examine the indirect effects of feedback framing on revised plan quality through perceived helpfulness and perceived motivation, while controlling for initial plan quality. Bootstrapping will be used to obtain confidence intervals for the indirect effects, given the potential violations of normality and heteroscedasticity assumptions. The mediation model will include feedback framing as the independent variable, perceived helpfulness / perceived motivation as mediators, and revised plan quality as the dependent variable. The analysis will also account for the clustered nature of the data by including a random intercept for child.
 
 **RQ2, H2.1 Results of Assumption Testing**
 
@@ -1588,13 +1595,13 @@ will predict a higher plan quality after revision.
 - *Conclusion:* Data does not meet all assumptions for analysis (full diagnostic output and test statistics reported in the
   Appendix).
   Deviations could reflect the bounded categorical nature of the scores,
-  which is why a Bootstrapping will be performed
+  which is why a Bootstrapping was performed
 
 ✓ = assumption met
 
 **Model specification**
 
-```{r RQ2-H2-1-model, results='hide', echo=TRUE}
+```{r RQ2-H2-1-model, results='hide', echo=TRUE, cache=TRUE}
 # specify mediation model with feedback condition as independent variable, perceived helpfulness as mediator and revised plan quality as dependent variable, controlling for initial plan quality
 # perct_help is within-person centered specifically because feedback_condition is manipulated within each child
 # Initial plan quality is entered as separate within-child (initial_pq_c) and between-child (initial_pq_mean_child) components, consistent with H1. 
@@ -1622,9 +1629,12 @@ fit_h21 <- sem(model = mediation_model,
            bootstrap = N_bootstrap)    
 
 summary(fit_h21, standardized = TRUE, ci = TRUE)
+
+# Explained variance (R²) of the mediator and outcome equations for H2.1 
+r2_h21 <- lavInspect(fit_h21, "rsquare")
+r2_h21
 ```
 
-**RQ2, H2.1**
 
 ```{r H2-1-visualization}
 # Create a summary table of the mediation analysis results for H2.1, including estimates, standard errors, z-values, p-values, and confidence intervals for each path in the mediation model. The table is formatted for publication using the gt package.
@@ -1634,15 +1644,16 @@ descriptions = c(
   "Path b (Helpfulness -> Revised Quality)",
   "Indirect Effect (IDE)", "Direct Effect (DE / Path c')", "Total Effect (TE)"
 ))
-render_mediation_kbl(table_h2_1, caption = "Mediation Model of Perceived Helpfulness on Plan Quality Revision (H2.1)")
+render_mediation_kbl(table_h2_1, caption = "Perceived Helpfulness as Mediator between Feedback Condition and Revised Plan Quality (H2.1)")
 ```
 
-*Note.* Instructive feedback serves as the reference category for
+<small> *Note.* Instructive feedback serves as the reference category for
 feedback condition. Perceived helpfulness serves as Mediator and was
 centered as well as the covariate. <i>b</i> = unstandardized estimate;
 <i>𝛽</i> = standardized estimate. 95% CI bounds correspond to
 unstandardized effects (calculated via cluster bootstrap at the child
-level).
+level). <i>R²</i><sub>mediator</sub> = `r fmt_bounded(r2_h21["perct_help_c"])`,
+<i>R²</i><sub>outcome</sub> = `r fmt_bounded(r2_h21["revised_pq"])`. </small>
 
 
 
@@ -1650,7 +1661,7 @@ level).
 
 - Non-Linearity of Path Relations detected
 
-- Non-normality of residuals detected, <i>p</i> \< .001
+- Non-normality of residuals detected
 
 - Heteroscedasticity detected
 
@@ -1662,7 +1673,7 @@ level).
 
 **Model specification**
 
-```{r RQ2-H2-2-model, results='hide', echo=TRUE}
+```{r RQ2-H2-2-model, results='hide', echo=TRUE, cache=TRUE}
 # specify mediation model with feedback condition as independent variable, perceived motivation as mediator and revised plan quality as dependent variable, controlling for initial plan quality
 # perct_moti is within-person centered specifically because feedback_condition is manipulated within each child
 # Initial plan quality is entered as separate within-child (initial_pq_c) and between-child (initial_pq_mean_child) components, consistent with H1. 
@@ -1689,6 +1700,10 @@ fit_h22 <- sem(model = mediation_model_h2,
            bootstrap = N_bootstrap)    
 
 summary(fit_h22, standardized = TRUE, ci = TRUE)
+
+# Explained variance (R²) of the mediator and outcome equations for H2.2
+r2_h22 <- lavInspect(fit_h22, "rsquare")
+r2_h22
 ```
 
 
@@ -1699,8 +1714,15 @@ table_h2_2 <- extract_mediation_table(fit_h22, descriptions = c(
   "Path b (Motivation -> Revised Quality)",
   "Indirect Effect (IDE)", "Direct Effect (DE / Path c')", "Total Effect (TE)"
 ))
-render_mediation_kbl(table_h2_2, caption = "Mediation Model of Perceived Motivation on Plan Quality Revision (H2.2)")
+render_mediation_kbl(table_h2_2, caption = "Perceived Motivation as Mediator between Feedback Condition and Revised Plan Quality (H2.2)")
 ```
+<small> *Note.* Instructive feedback serves as the reference category for
+feedback condition. Perceived helpfulness serves as Mediator and was
+centered as well as the covariate. <i>b</i> = unstandardized estimate;
+<i>𝛽</i> = standardized estimate. 95% CI bounds correspond to
+unstandardized effects (calculated via cluster bootstrap at the child
+level). <i>R²</i><sub>mediator</sub> = `r fmt_bounded(r2_h22["perct_moti_c"])`,
+<i>R²</i><sub>outcome</sub> = `r fmt_bounded(r2_h22["revised_pq"])`. </small>
 
 
 ## Research Question 3
@@ -1730,13 +1752,14 @@ children’s receptivity to the feedback.
 - Normality of random effects ✓
 - No multicollinearity ✓
 - *Conclusion:* Data does not meet all the assumptions for analysis (full diagnostic output and test statistics reported in the
-  Appendix).
-
+  Appendix). Thus, a robustness check will be performed in the end to examine the robustness of the receptivity scale's internal
+  consistency.
+  
 ✓ = assumption met
 
 **Model specification**
 
-```{r RQ3-analysis, results='hide', echo=TRUE}
+```{r RQ3-model, results='hide', echo=TRUE}
 # fit linear mixed model with interaction between feedback condition and receptivity, controlling for initial plan quality and random intercept for child
 model_h3 <- lmerTest::lmer(
   revised_pq ~ feedback_condition * receptivity_c + initial_pq_mean_child + initial_pq_c + (1 | child_id),
@@ -1746,7 +1769,12 @@ model_h3 <- lmerTest::lmer(
 summary(model_h3)
 ```
 
-```{r RQ3-effect-sizes, include=FALSE}
+**ICC and effect sizes for final model**
+
+```{r RQ3-effect-sizes}
+# Intraclass correlation coefficient to examine the proportion of variance explained
+performance::icc(model_h3)
+
 # Calculate effect sizes for the linear mixed model, including marginal and conditional R² values, as well as semi-partial R² and f² for each predictor. This provides insight into the variance explained by fixed effects alone and by both fixed and random effects combined.
 effect_sizes_h3 <- extract_effect_sizes(model_h3)
 effect_sizes_h3$r2_marginal      # variance explained by fixed effects
@@ -1754,8 +1782,7 @@ effect_sizes_h3$r2_conditional   # variance explained by fixed + random effects
 effect_sizes_h3$per_predictor    # semi-partial R² and f² per predictor
 ```
 
-
-```{r RQ3-visualization-table}
+```{r RQ3-visualization-table, message=FALSE}
 # Create a summary table of the linear mixed model results for H3, including estimates, standard errors, t-values, p-values, and confidence intervals for each predictor. The table is formatted for publication using the gt package.
 table_h3 <- extract_lmm_table(model_h3, c(
   "Intercept" = "Intercept",
@@ -1765,7 +1792,7 @@ table_h3 <- extract_lmm_table(model_h3, c(
   "initial_pq_mean_child" = "Initial PQ (Child-Level)",
   "feedback_conditiondialogic:receptivity_c" = "Feedback Condition × Receptivity"
 ))
-render_lmm_gt(table_h3, caption = "Linear Mixed Model with Moderator Effect (H3)")
+render_lmm_gt(table_h3, caption = "Linear Mixed Model Testing the Moderating Role of Feedback Receptivity on Revised Plan Quality (H3)")
 ```
 
 *Note.* <i>N</i> = `r n_children_after` children, total observations =
@@ -1774,6 +1801,7 @@ category for feedback condition. PQ = Plan Quality. CI = confidence interval; <i
 lower limit; <i>UL</i> = upper limit. R²m =
 `r fmt(effect_sizes_h3$r2_marginal, 3)`, R²c =
 `r fmt(effect_sizes_h3$r2_conditional, 3)`.
+
 
 # Additional Analyses
 
@@ -1822,8 +1850,9 @@ ordinal_data <- merged_data |>
   )
 ```
 
+Fit a cumulative link mixed model (CLMM) to analyze the effects of feedback condition and time point on plan quality, with random intercepts for child to account for repeated measures. The model uses a logit link function to estimate the odds of higher plan quality scores based on the fixed effects of feedback condition and time point.
+
 ```{r robust-RQ1-analysis, results='hide', echo=TRUE}
-# Fit a cumulative link mixed model (CLMM) to analyze the effects of feedback condition and time point on plan quality, with random intercepts for child to account for repeated measures. The model uses a logit link function to estimate the odds of higher plan quality scores based on the fixed effects of feedback condition and time point.
 clmm_model <- clmm(
   plan_quality ~ feedback_condition * time_point + (1 | child_id),
   data = ordinal_data,
@@ -1832,7 +1861,7 @@ clmm_model <- clmm(
 ```
 
 
-```{r robust-RQ1-visualization, tab.cap="Results of the Cumulative Link Mixed Model for Plan Quality"}
+```{r robust-RQ1-visualization, tab.cap="Cumulative Link Mixed Model of Plan Quality as a Function of Feedback Condition and Time Point (Robustness Check for H1)"}
 # Render the results of the cumulative link mixed model (CLMM) for plan quality in a publication-ready table format using the gt package. The table includes estimates, odds ratios, confidence intervals, and p-values for each predictor in the model, with appropriate labels and formatting for clarity.
 extract_clmm_table <- function(model) {
   coefs  <- summary(model)$coefficients
@@ -1919,7 +1948,7 @@ table_clmm_full <- dplyr::bind_rows(table_clmm, random_part) |>
 
 table_clmm_full |>
   gt(rowname_col = "Effect", groupname_col = "Group") |>
-  tab_caption(caption = "Results of the Cumulative Link Mixed Model for Plan Quality") |>
+  tab_caption(caption = "Cumulative Link Mixed Model of Plan Quality as a Function of Feedback Condition and Time Point (Robustness Check for H1)") |>
   tab_spanner(label = "Plan Quality", columns = c(Estimate, CI)) |>
   cols_label(Estimate = md("*Odds Ratio*"), CI = md("*95% CI*")) |>
   text_transform(
@@ -2025,14 +2054,16 @@ anova_initial_summary <- as.data.frame(anova_initial$anova_table) |>
   tibble::rownames_to_column("Effect") |>
   dplyr::transmute(
     Effect,
+    `$df$` = paste(fmt(`num Df`, digits = 0), fmt(`den Df`, digits = 0), sep = ", "),
     `$F$` = fmt(`F`),
     `$p$` = format_p(`Pr(>F)`),
     `$\\eta^2_G$` = fmt(ges, digits = 2),
     `$\\varepsilon_{GG}$` = fmt(gg_eps_initial, digits = 2)
   ) |>
-  dplyr::select(Effect, `$F$`, `$p$`, `$\\eta^2_G$`, `$\\varepsilon_{GG}$`)
+  dplyr::select(Effect, `$df$`, `$F$`, `$p$`, `$\\eta^2_G$`, `$\\varepsilon_{GG}$`)
 
-knitr::kable(
+
+kableExtra::kbl(
   anova_initial_summary,
   caption = "Repeated Measures Anova for Initial Plan Quality across Trials"
 ) |>
@@ -2055,14 +2086,15 @@ anova_revised_summary <- as.data.frame(anova_revised$anova_table) |>
   tibble::rownames_to_column("Effect") |>
   dplyr::transmute(
     Effect,
+    `$df$` = paste(fmt(`num Df`, digits = 0), fmt(`den Df`, digits = 0), sep = ", "),
     `$F$` = fmt(`F`),
     `$p$` = format_p(`Pr(>F)`),
     `$\\eta^2_G$` = fmt(ges, digits = 2),
     `$\\varepsilon_{GG}$` = fmt(gg_eps_revised, digits = 2)
   ) |>
-  dplyr::select(Effect, `$F$`, `$p$`, `$\\eta^2_G$`, `$\\varepsilon_{GG}$`)
+  dplyr::select(Effect, `$F$`, `$df$`, `$p$`, `$\\eta^2_G$`, `$\\varepsilon_{GG}$`)
 
-knitr::kable(
+kableExtra::kbl(
   anova_revised_summary,
   caption = "Repeated Measures Anova for Revised Plan Quality across Trials"
 ) |>
@@ -2130,14 +2162,15 @@ anova_initial_scenario_summary <- as.data.frame(anova_initial_scenario$anova_tab
   tibble::rownames_to_column("Effect") |>
   dplyr::transmute(
     Effect,
+    `$df$` = paste(fmt(`num Df`, digits = 0), fmt(`den Df`, digits = 0), sep = ", "),
     `$F$` = fmt(`F`),
     `$p$` = format_p(`Pr(>F)`),
     `$\\eta^2_G$` = fmt(ges, digits = 2),
     `$\\varepsilon_{GG}$` = fmt(gg_eps_initial_scenario, digits = 2)
   ) |>
-  dplyr::select(Effect, `$F$`, `$p$`, `$\\eta^2_G$`, `$\\varepsilon_{GG}$`)
+  dplyr::select(Effect, `$df$`,`$F$`, `$p$`, `$\\eta^2_G$`, `$\\varepsilon_{GG}$`)
 
-knitr::kable(
+kableExtra::kbl(
   anova_initial_scenario_summary,
   caption = "Repeated Measures Anova for Initial Plan Quality across Scenarios"
 ) |>
@@ -2150,9 +2183,10 @@ knitr::kable(
 Because scenario has 6 levels, Mauchly's test for sphericity was conducted, *W* = `r fmt(summary(anova_initial_scenario)$sphericity.tests[1, "Test statistic"])`,
 *p* `r format_p(summary(anova_initial_scenario)$sphericity.tests[1, "p-value"])`; *F*, *p*, and η²_G are Greenhouse-Geisser corrected wherever sphericity was violated (ε < 1), as reflected in the ε (GG) column.
 
-____________________________________________________________________________
 
-## Mixed Anova: Time (Initial vs. Revised Plan Quality) x Gender
+## Distribution of Plan Quality by Gender
+
+This analysis is exploratory and was not part of the pre-registered hypotheses H1–H3. 
 
 ```{r mixed-anova-gender, include=FALSE}
 # Reshape to long format for the mixed ANOVA: time (initial vs. revised plan quality) is the within-subjects factor, gender is the between-subjects factor.
@@ -2162,7 +2196,7 @@ long_data_gender <- merged_data |>
                names_to = "time",
                values_to = "planquality") |>
   mutate(
-    time = recode_values(time,
+    time = case_match(time,
                        "initial_pq" ~ "Initial Plan",
                        "revised_pq" ~ "Revised Plan"),
    gender = dplyr::recode(as.character(gender),
@@ -2199,9 +2233,9 @@ anova_gender_summary <- as.data.frame(anova_gender$anova_table) |>
     `$\\eta^2_G$` = fmt(ges, digits = 2)
   )
 
-knitr::kable(
+kableExtra::kbl(
   anova_gender_summary,
-  caption = "Mixed ANOVA of Plan Quality by Time and Gender"
+  caption = "Mixed Anova of Plan Quality by Time and Gender"
 ) |>
   kable_classic(full_width = FALSE, html_font = "Times New Roman") |>
   column_spec(1:5, extra_css = "padding: 10px;") |>
@@ -2215,6 +2249,9 @@ summary_data_gender <- long_data_gender |>
             .groups = 'drop')
 ```
 
+<small> *Note.* Results are based on a 2 (Time: initial vs. revised plan quality) × 2 (Gender: male, female) mixed-design ANOVA, with time as the within-subjects factor and gender as the between-subjects factor. The "other" gender category was not represented in the analytic sample (*n* = 0) and was therefore automatically dropped from the model. Because the within-subjects factor has only two levels, the sphericity assumption is trivially met and no Greenhouse-Geisser correction was required. </small>
+
+
 ```{r mixed-anova-gender-figure, fig.cap="Mixed Anova of Plan Quality"}
 ggplot(summary_data_gender, aes(x = time, y = mean_pq, color = gender, group = gender)) +
   geom_line(linewidth = 1.2) +
@@ -2227,15 +2264,11 @@ ggplot(summary_data_gender, aes(x = time, y = mean_pq, color = gender, group = g
   theme_thesis() +
   theme(legend.position = "right")
 ```
+<small> *Note.* Points represent estimated means of plan quality by time point (initial vs. revised) and gender; error bars indicate ±1 *SE*. </small>
 
+- Plan quality improved substantially from the initial to the revised plan for both genders, *F*(`r fmt(anova_gender$anova_table["time", "num Df"], 0)`, `r fmt(anova_gender$anova_table["time", "den Df"], 0)`) = `r fmt(anova_gender$anova_table["time", "F"])`, *p* `r format_p(anova_gender$anova_table["time", "Pr(>F)"])`, η²_G = `r fmt(anova_gender$anova_table["time", "ges"])`.
+- Girls showed higher plan quality than boys at both time points, *F*(`r fmt(anova_gender$anova_table["gender", "num Df"], 0)`, `r fmt(anova_gender$anova_table["gender", "den Df"], 0)`) = `r fmt(anova_gender$anova_table["gender", "F"])`, *p* `r format_p(anova_gender$anova_table["gender", "Pr(>F)"])`, η²_G = `r fmt(anova_gender$anova_table["gender", "ges"])`, but the two genders improved to a comparable extent, as indicated by the non-significant time × gender interaction.
 
-
-
-
-
-
-
-____________________________________________________________________________
 
 ## Robustness Check RQ3
 
