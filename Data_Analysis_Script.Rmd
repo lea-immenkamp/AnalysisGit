@@ -48,6 +48,7 @@ Sample Characteristics
 
 Distribution
 
+- Table \@ref(tab:plan-quality-table): Distribution Scores for Initial and Revised Plan Quality
 - Table \@ref(tab:perception-assumption-usefulness-table): Shapiro-Wilk Tests for Perceived Usefulness
 - Table \@ref(tab:perception-test-usefulness): Wilcoxon Signed-Rank Tests for Perceived Usefulness
 
@@ -76,16 +77,12 @@ Additional Analyses
 - Table \@ref(tab:exploratory-RQ3-table): Exploratory Item-Level Moderation Analysis of Receptivity
 
 
------------------------------Extra listing when I received the rubric rating (to be included)-----------------------------
-- [Table 4: Distribution Scores for Initial and Revised Plan Quality](#tab-4)
-- [Table 5: Reliability and Normality Test for the five Rubrics](#tab-5)
-
-
   
 # List of Figures 
 
 Distribution
 
+- Figure \@ref(fig:rubrics-visualization): Distribution of Scores Across Initial and Revised Rubric Items
 - Figure \@ref(fig:spaghetti-plot): Spaghetti Plot on Child-level
 - Figure \@ref(fig:spaghetti-plot-for-planning-trial): Spaghetti Plot on Trial-level
 - Figure \@ref(fig:visualization-perception): Distribution of Perceived Helpfulness and Motivation
@@ -102,11 +99,6 @@ Additional Analyses
 - Figure \@ref(fig:plan-quality-across-scenarios): Plan Quality across Scenarios
 - Figure \@ref(fig:mixed-anova-gender-figure): Plan Quality by Time and Gender
 
-
-
------------------------------Extra listing-----------------------------
-
-- Figure \@ref(fig:rubrics-visualization): Distribution of Scores Across Initial and Revised Rubric Items
 
 
 # Research Questions
@@ -164,6 +156,7 @@ library(officer)
 library(DHARMa)
 library(here)
 library(renv)
+library(janitor)
 
 # Resolve namespace conflicts by specifying preferred functions from specific packages
 conflicts_prefer(
@@ -221,7 +214,7 @@ fmt_bounded <- function(x, digits = 3) {
 ```{r package-management}
 # Create table of packages, their purpose and version 
 packages <- data.frame(
-  Package = c("tidyverse", "renv", "here", "conflicted",
+  Package = c("tidyverse", "renv", "here", "janitor", "conflicted",
               "ordinal", "lme4", "lmerTest", "afex", "rstatix", "emmeans",
               "car", "performance", "r2glmm", "DHARMa", "lavaan",
               "psych", "sjPlot",
@@ -231,6 +224,7 @@ packages <- data.frame(
     "Data wrangling, transformation, and visualization",
     "precise version specification for reproducibility",
     "relative paths",
+    "Cleaning messy data (variable names, empty rows/columns)",
     "Manage namespace conflicts",
     "Ordinal regression models",
     "Linear mixed-effects models (core functionality)",
@@ -291,18 +285,14 @@ merged_data_raw <- data_plan_and_feedback |>
     feedback_type = factor(feedback_type, levels = c("instructive", "dialogic")),
     initial_pq = as.numeric(initial_pq),
     revised_pq = as.numeric(revised_pq),
-    pq_improvement = revised_pq - initial_pq
-    ####################ACHTUNG: HIER MÜSSEN NOCH DIE RUBRIC ITEMS MIT REIN##########
-    # , recep_q1 = as.numeric(as.character(recep_q1)),
-    #recep_q2 = as.numeric(as.character(recep_q2)),
-    #recep_q3 = as.numeric(as.character(recep_q3)),
-    #recep_q4 = as.numeric(as.character(recep_q4))
+    pq_improvement = revised_pq - initial_pq,
+    across(c(in_sp, in_ex, in_sa, in_ap, in_tp, 
+             re_sp, re_ex, re_sa, re_ap, re_tp), as.integer)
   ) |>
   rename(
     receptivity = recep_total,
     feedback_condition = feedback_type
   )
-
 ```
 
 ```{r missing-data-documentation}
@@ -383,12 +373,11 @@ kableExtra::kbl(
 
 
 - Of the original `r n_children_before` children, `r n_children_excluded`
-  (`r fmt(100 * n_children_excluded / n_children_before, 1)`%) was excluded
-  because more than `r max_missing_trials` of its `r n_distinct(merged_data_raw$scen_id)`
-  trials had missing values in initial or revised plan quality. Among the
+  (`r fmt(100 * n_children_excluded / n_children_before, 1)`%) were excluded
+  because more than `r max_missing_trials` of their 6 trials had missing values in initial or revised plan quality. Among the
   remaining `r n_children_after` children, an additional
-  `r n_trials_dropped_from_retained_children` individual trial with missing
-  values was removed, resulting in <i>N</i> = `r n_trials_after` trials (`r n_children_after` * 6 - `r n_trials_dropped_from_retained_children`).
+  `r n_trials_dropped_from_retained_children` individual trials with missing
+  values were removed, resulting in <i>N</i> = `r n_trials_after` trials (`r n_children_after` * 6 - `r n_trials_dropped_from_retained_children`).
 
 
 ```{r data-preparation, cache=TRUE}
@@ -437,15 +426,15 @@ merged_data <- merged_data |>
 ```
 
 ```{r select-columns}
-# arrange and rename columns 
+# arrange columns 
 merged_data <- merged_data |>
   dplyr::select(
     child_id, trial_id,
     age, gender,
     scen_id,
     feedback_condition,
-    #in_sp, in_ex, in_sa, in_ap, in_tp, initial_pq, 
-    #re_sp, re_ex, re_sa, re_ap, re_tp, revised_pq,
+    in_sp, in_ex, in_sa, in_ap, in_tp, 
+    re_sp, re_ex, re_sa, re_ap, re_tp, 
     initial_pq,
     revised_pq,
     pq_improvement,
@@ -805,9 +794,144 @@ demographics_table |>
 Before conducting the analysis, the data distribution was inspected to
 gain an understanding of the characteristics of the dataset.
 
+
 ## Distribution of Plan Quality Rubrics
 
-#-------------------------hier den Code aus To-Dos_and_Ignore einfügen-------------------------
+```{r rubrics-distribution, include=FALSE}
+# Extract rubric items
+initial_items <- merged_data |> 
+  select(in_sp, in_ex, in_sa, in_ap, in_tp)
+revised_items <- merged_data  |> 
+  select(re_sp, re_ex, re_sa, re_ap, re_tp)
+
+# Descriptive Statistic
+summary(initial_items)
+print(sapply(initial_items, var)) 
+
+summary(revised_items)
+print(sapply(revised_items, var))
+```
+
+Plans (Initial and Revised) were rated on five dimensions:
+
+- appropriateness
+- externality
+- salience
+- specificity
+- temporal precision
+
+```{r rubrics-visualization, fig.cap="Distribution of Scores Across Initial and Revised Rubric Items"}
+# Visualize the distribution of the five plan-quality rubric items (0/1) separately
+# for initial and revised plans, to inspect item-level floor/ceiling effects that a
+# single summed score (initial_pq/revised_pq) would otherwise mask
+bind_cols(initial_items, revised_items) |>
+  pivot_longer(cols = everything(), names_to = "item", values_to = "score") |>
+  mutate(
+    type = case_when(
+      item %in% names(initial_items) ~ "Initial Plan",
+      TRUE ~ "Revised Plan"
+    ),
+    type = factor(type, levels = c("Initial Plan", "Revised Plan")),
+    item = recode_values(
+      item,
+      c("in_ap", "re_ap") ~ "appropriateness",
+      c("in_ex", "re_ex") ~ "externality",
+      c("in_sa", "re_sa") ~ "salience",
+      c("in_sp", "re_sp") ~ "specificity",
+      c("in_tp", "re_tp") ~ "temporal precision"
+    )
+  ) |>
+  ggplot(aes(x = item, fill = factor(score))) +
+  geom_bar(position = "dodge") +
+  facet_wrap(~type, scales = "free_x", strip.position = "bottom") +
+  labs(x = NULL, y = "Frequency", fill = "Score") +
+  theme_thesis() +
+  theme(
+    legend.position = "right",
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+    strip.placement = "outside",
+    panel.spacing = unit(1, "lines")
+  )
+```
+
+<small> *Note*. Bars show the frequency of plans meeting (1) or not
+meeting (0) each rubric criterion. Initial Plan ratings were assigned
+before feedback. Revised Plan ratings were assigned after feedback.
+Frequencies are based on `r n_trials_after` observations for each rubric (`r n_children_after` children
+× 6 trials - `r n_trials_dropped_from_retained_children` trial). </small>
+
+
+
+```{r rubrics-scale-reliability, include=FALSE}
+# Internal consistency of the initial/revised rubric scales (KR-20, since the five rubric items are dichotomously coded). Computed here, reported as inline text below the figure rather than as a standalone table, since only two numbers result.
+alpha_initial <- psych::alpha(initial_items)
+alpha_revised <- psych::alpha(revised_items)
+```
+
+- Internal consistency was acceptable for the initial plan quality
+  scale (α = `r fmt_bounded(alpha_initial$total$raw_alpha, 2)`) but
+  below the threshold of α = .70 (Nunnally, 1978) for the revised scale (α = `r fmt_bounded(alpha_revised$total$raw_alpha, 2)`),
+  indicating comparatively lower reliability of the revised rubric items. Because the
+  five items are dichotomously coded (0 = not met, 1 = met), Cronbach's alpha here is
+  mathematically equivalent to the Kuder-Richardson Formula 20 (KR-20) coefficient
+  (Kuder & Richardson, 1937).
+
+
+
+## Distribution of Plan Quality
+
+```{r plan-quality-descriptives, include=FALSE}
+# Check ranges of plan quality scores 
+range(merged_data$initial_pq, na.rm = TRUE) 
+  table(merged_data$initial_pq)
+range(merged_data$revised_pq, na.rm = TRUE) 
+  table(merged_data$revised_pq)
+
+initial_tab <- tabyl(merged_data$initial_pq) |> 
+  adorn_pct_formatting(digits = 1) |> 
+  mutate(initial = paste0(n, " (", percent, ")"))
+
+revised_tab <- tabyl(merged_data$revised_pq) |> 
+  adorn_pct_formatting(digits = 1) |> 
+  mutate(revised = paste0(n, " (", percent, ")"))
+
+colnames(initial_tab)[1] <- "score"
+colnames(revised_tab)[1] <- "score"
+
+final_tab <- full_join(initial_tab[, c("score", "initial")],
+                       revised_tab[, c("score", "revised")],
+                       by = "score") |> 
+  arrange(as.numeric(as.character(score))) |> 
+  mutate(across(everything(), ~replace(., is.na(.), "0 (0.0%)")))
+```
+
+
+```{r plan-quality-table}
+kableExtra::kbl(
+  final_tab,
+  col.names = c("Score",
+                "Initial PQ",
+                "Revised PQ"),
+  align = "c",
+  caption = "Distribution Scores for Initial and Revised Plan Quality"
+) |>
+  kable_styling(
+    font_size = 11,
+    html_font = "Times New Roman"
+  ) |>
+  column_spec(1, width = "5em") |>
+  column_spec(2, width = "8em") |>
+  column_spec(3, width = "9em") |>
+  row_spec(0:nrow(final_tab), extra_css = "line-height: 1.5; padding-top: 1px; padding-bottom: 1px;") |>
+  kable_classic(full_width = FALSE, font_size = 12, html_font = "Times New Roman")
+
+```
+
+<small> *Note.* PQ= Plan Quality. Scores were calculated by summing the
+five dichotomous rubric items (0 = criterion not met, 1 = criterion met)
+for the initial and revised plans, resulting in a total score ranging
+from 0 to 5. <i>N</i> = `r n_children_after` children, total observations =
+`r n_trials_after` for initial and revised plan quality each. </small>
 
 
 **Plan Quality Visualization**
@@ -2577,6 +2701,8 @@ Cohen, J. (1992). A power primer. Psychological Bulletin, 112(1),
 155–159. <https://doi.org/10.1037/0033-2909.112.1.155>
 
 Jaeger, B. C., Edwards, L. J., Das, K., & Sen, P. K. (2016). An R2 statistic for fixed effects in the generalized linear mixed model. Journal of Applied Statistics, 44(6), 1086–1105. https://doi.org/10.1080/02664763.2016.1193725
+
+Kuder, G. F., & Richardson, M. W. (1937). The theory of the estimation of test reliability. Psychometrika, 2(3), 151–160. https://doi.org/10.1007/BF02288391
 
 Nakagawa, S., & Schielzeth, H. (2013). A general and simple method for
 obtaining R2 from generalized linear mixed-effects models. Methods in
