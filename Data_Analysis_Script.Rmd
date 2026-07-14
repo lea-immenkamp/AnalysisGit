@@ -107,11 +107,8 @@ Additional Analyses
 the revised plan differ between LLM-generated dialogic and instructive
 feedback?
 
-**RQ2:** To what extent does the perceived usefulness of LLM generated
-feedback, specifically perceived helpfulness and perceived motivation,
-mediate the relationship between feedback framing and children’s plan
-quality after revision, with the feedback being instructive vs.
-dialogic?
+**RQ2:** To what extent does the perceived helpfulness and perceived motivation of LLM generated
+feedback, mediate the relationship between feedback condition and children’s plan quality after revision, with the feedback being instructive vs. dialogic?
 
 **RQ3:** Does feedback receptivity moderate the relationship between
 LLM-generated instructive and dialogic feedback and the quality of the
@@ -149,7 +146,6 @@ library(gt)
 library(rstatix)
 library(conflicted)
 library(afex)
-library(sjPlot)
 library(psych)
 library(flextable)
 library(officer)
@@ -217,7 +213,7 @@ packages <- data.frame(
   Package = c("tidyverse", "renv", "here", "janitor", "conflicted",
               "ordinal", "lme4", "lmerTest", "afex", "rstatix", "emmeans",
               "car", "performance", "r2glmm", "DHARMa", "lavaan",
-              "psych", "sjPlot",
+              "psych",
               "knitr", "kableExtra", "gt",
               "flextable", "officer"),
   Purpose = c(
@@ -238,7 +234,6 @@ packages <- data.frame(
     "Residual diagnostics for hierarchical and complex models",
     "Structural Equation Modeling (SEM)",
     "Psychometric analysis and descriptive statistics",
-    "Create publication-ready statistical tables and figures",
     "Dynamic document generation",
     "Table formatting for HTML and LaTeX",
     "Create formatted tables for publication",
@@ -276,6 +271,11 @@ questionnaire        <- read_csv(here("data", "Questionnaire_GPT2.0_Thesis.csv")
 ```
 
 ```{r merge-data, warning=FALSE}
+# Remove fully blank rows (every column NA).
+# As they contain no analyzable information, they are dropped here, prior to merging, so that the missing-data accounting reported below (see Missing Data section) reflects only substantive missingness within actual observations, not empty rows carried over from the raw file.
+data_plan_and_feedback <- data_plan_and_feedback |>
+  filter(if_any(everything(), ~ !is.na(.x)))
+
 # Merge data sets and convert variable types
 merged_data_raw <- data_plan_and_feedback |> 
   left_join(questionnaire, by = "child_id") |> 
@@ -371,13 +371,35 @@ kableExtra::kbl(
   kableExtra::row_spec(3, extra_css = "border-bottom: 1px solid black;")
 ```
 
-
 - Of the original `r n_children_before` children, `r n_children_excluded`
-  (`r fmt(100 * n_children_excluded / n_children_before, 1)`%) were excluded
-  because more than `r max_missing_trials` of their 6 trials had missing values in initial or revised plan quality. Among the
+  (`r fmt(100 * n_children_excluded / n_children_before, 1)`%) was excluded
+  because more than `r max_missing_trials` of its 6 trials had missing values in initial or revised plan quality. Among the
   remaining `r n_children_after` children, an additional
   `r n_trials_dropped_from_retained_children` individual trials with missing
-  values were removed, resulting in <i>N</i> = `r n_trials_after` trials (`r n_children_after` * 6 - `r n_trials_dropped_from_retained_children`).
+  values were removed, resulting in <i>N</i> = `r n_trials_after` trials.
+
+```{r missing-data-by-variable, include=FALSE}
+vars_to_check <- c(
+  "initial_pq", "revised_pq",
+  "perct_help", "perct_moti",
+  "recep_q1", "recep_q2", "recep_q3", "recep_q4_r", "receptivity",
+  "age", "gender"
+)
+
+missing_by_variable <- merged_data |>
+  summarise(across(all_of(vars_to_check), ~ sum(is.na(.x)))) |>
+  pivot_longer(everything(), names_to = "Variable", values_to = "n_missing") |>
+  mutate(Percent_missing = fmt(100 * n_missing / n_trials_after, 1))
+
+kableExtra::kbl(
+  missing_by_variable,
+  caption = "Missing Data by Variable",
+  col.names = c("Variable", "n missing", "% missing")
+) |>
+  kableExtra::kable_styling(full_width = FALSE, font_size = 11)
+```
+
+- Other variables (e.g., perceived helpfulness, age) are fully observed and have no missing values.
 
 
 ```{r data-preparation, cache=TRUE}
@@ -818,13 +840,13 @@ Plans (Initial and Revised) were rated on five dimensions:
 - externality
 - salience
 - specificity
-- temporal precision
+- temporal precisionS
 
 ```{r rubrics-visualization, fig.cap="Distribution of Scores Across Initial and Revised Rubric Items"}
 # Visualize the distribution of the five plan-quality rubric items (0/1) separately
 # for initial and revised plans, to inspect item-level floor/ceiling effects that a
 # single summed score (initial_pq/revised_pq) would otherwise mask
-bind_cols(initial_items, revised_items) |>
+rubrics_visualization <- bind_cols(initial_items, revised_items) |>
   pivot_longer(cols = everything(), names_to = "item", values_to = "score") |>
   mutate(
     type = case_when(
@@ -832,7 +854,7 @@ bind_cols(initial_items, revised_items) |>
       TRUE ~ "Revised Plan"
     ),
     type = factor(type, levels = c("Initial Plan", "Revised Plan")),
-    item = recode_values(
+    item = case_match(
       item,
       c("in_ap", "re_ap") ~ "appropriateness",
       c("in_ex", "re_ex") ~ "externality",
@@ -1320,7 +1342,7 @@ not at all receptive, 5 = very receptive).
 
 ```{r visualization-receptivity, include=FALSE}
 # Prepare data for visualization of feedback receptivity items and total score by reshaping the data into a long format, allowing for the creation of violin plots to show the distribution of responses for each receptivity measure.
-# Note: recep_q4_r is the reverse-coded item and needs to be included instead of the original recep_q4 item to ensure that all items are oriented in the same direction for analysis. 
+# Note: recep_q4_r is the reverse-coded item and needs to be included instead of the original recep_q4 item to ensure that all items are oriented in the same direction for analysis. Reverse encoding is derived from the raw CSV.
 feedback_receptivity_long <- merged_data |> 
   distinct(child_id, .keep_all = TRUE) |>  
   pivot_longer(
@@ -1667,8 +1689,8 @@ render_lmm_gt(table_h1, caption = "Linear Mixed Model Predicting Revised Plan Qu
 `r n_trials_after` trials. Instructive feedback serves as the reference
 category for feedback condition. PQ = Plan Quality. CI = confidence interval; <i>LL</i> =
 lower limit; <i>UL</i> = upper limit. 
-R²m = `r fmt(effect_sizes_h1$r2_marginal, 3)`, 
-R²c = `r fmt(effect_sizes_h1$r2_conditional, 3)`. </small>
+R²m = `r fmt_bounded(effect_sizes_h1$r2_marginal)`,
+R²c = `r fmt_bounded(effect_sizes_h1$r2_conditional)`. </small>
 
 
 ```{r RQ1-visualization-plot, fig.cap="Estimated Marginal Means of Revised Plan Quality by Feedback Condition"}
@@ -1692,23 +1714,23 @@ emm |>
 
 **RQ2:** To what extent does the perceived usefulness of LLM generated
 feedback, specifically perceived helpfulness and perceived motivation,
-mediate the relationship between feedback framing and children’s plan
+mediate the relationship between feedback condition and children’s plan
 quality after revision, with the feedback being instructive vs.
 dialogic?
 
 **H2.1:** The perceived helpfulness of the feedback mediates the
-relationship between LLM-generated feedback framing and the quality of
+relationship between LLM-generated feedback condition and the quality of
 children's revised plans. Specifically, dialogic feedback will lead to a
 different perceived usefulness than instructive feedback, which in turn
 will predict a different plan quality after revision.
 
 **H2.2:** The perceived motivation of the feedback mediates the
-relationship between LLM-generated feedback framing and the quality of
+relationship between LLM-generated feedback condition and the quality of
 children's revised plans. Specifically, dialogic feedback will lead to a
 higher perceived motivation, than instructive feedback, which in turn
 will predict a higher plan quality after revision.
 
-**Planned Analysis:** To test these hypotheses, a mediation analysis will be conducted using the `lavaan` package. The analysis will examine the indirect effects of feedback framing on revised plan quality through perceived helpfulness and perceived motivation, while controlling for initial plan quality. Bootstrapping will be used to obtain confidence intervals for the indirect effects, given the potential violations of normality and heteroscedasticity assumptions. The mediation model will include feedback framing as the independent variable, perceived helpfulness / perceived motivation as mediators, and revised plan quality as the dependent variable. The analysis will also account for the clustered nature of the data by including a random intercept for child.
+**Planned Analysis:** To test these hypotheses, a mediation analysis will be conducted using the `lavaan` package. The analysis will examine the indirect effects of feedback condition on revised plan quality through perceived helpfulness and perceived motivation, while controlling for initial plan quality. Bootstrapping will be used to obtain confidence intervals for the indirect effects, given the potential violations of normality and heteroscedasticity assumptions. The mediation model will include feedback condition as the independent variable, perceived helpfulness / perceived motivation as mediators, and revised plan quality as the dependent variable. The analysis will also account for the clustered nature of the data by including a random intercept for child.
 
 **RQ2, H2.1 Results of Assumption Testing**
 
@@ -1919,12 +1941,13 @@ table_h3 <- extract_lmm_table(model_h3, c(
 render_lmm_gt(table_h3, caption = "Linear Mixed Model Testing the Moderating Role of Feedback Receptivity on Revised Plan Quality (H3)")
 ```
 
-*Note.* <i>N</i> = `r n_children_after` children, total observations =
+<small> *Note.* <i>N</i> = `r n_children_after` children, total observations =
 `r n_trials_after` trials. Instructive feedback serves as the reference
 category for feedback condition. PQ = Plan Quality. CI = confidence interval; <i>LL</i> =
-lower limit; <i>UL</i> = upper limit. R²m =
-`r fmt(effect_sizes_h3$r2_marginal, 3)`, R²c =
-`r fmt(effect_sizes_h3$r2_conditional, 3)`.
+lower limit; <i>UL</i> = upper limit. 
+R²m =`r fmt_bounded(effect_sizes_h3$r2_marginal)`, R²c =
++ `r fmt_bounded(effect_sizes_h3$r2_conditional)`.
+</small>
 
 
 # Additional Analyses
@@ -2055,14 +2078,14 @@ random_part <- tibble(
 if (!is.na(tau00)) {
   icc_clmm <- tau00 / (tau00 + sigma2_logit)
   random_part <- dplyr::bind_rows(random_part, tibble(
-    Effect = "ICC", Estimate = fmt(icc_clmm), CI = "", Group = "Random Effects"
+     Effect = "ICC", Estimate = fmt_bounded(icc_clmm), CI = "", Group = "Random Effects"
   ))
 }
 
 if (!is.null(r2_clmm)) {
   random_part <- dplyr::bind_rows(random_part, tibble(
     Effect = "R² (marginal / conditional)",
-    Estimate = paste0(fmt(r2_clmm$R2_marginal, 3), " / ", fmt(r2_clmm$R2_conditional, 3)),
+    Estimate = paste0(fmt_bounded(r2_clmm$R2_marginal), " / ", fmt_bounded(r2_clmm$R2_conditional)),
     CI = "", Group = "Random Effects"
   ))
 }
@@ -2323,10 +2346,13 @@ long_data_gender <- merged_data |>
     time = case_match(time,
                        "initial_pq" ~ "Initial Plan",
                        "revised_pq" ~ "Revised Plan"),
-   gender = dplyr::recode(as.character(gender),
-                        "1" = "Male", "2" = "Female", "3" = "Other") |>
-     factor() |>
-     droplevels()
+   gender = case_match(as.character(gender),
+                       "1" ~ "Male", 
+                       "2" ~ "Female", 
+                      "3" ~ "Other",
+                     .default = as.character(gender)) |>
+  factor() |>
+  droplevels()
   )
 
 
@@ -2491,6 +2517,7 @@ render_lmm_comparison_gt(
   model_names = c("Original (4-item)", "Robustness check (3-item)"),
   caption = "Model Comparison Receptivity: Original vs. Robustness Check (3-item)"
 )
+
 ```
 
 
@@ -2695,35 +2722,16 @@ vif(vif_model_clmm)
 sessionInfo()
 ```
 
-# References
-
-Cohen, J. (1992). A power primer. Psychological Bulletin, 112(1),
-155–159. <https://doi.org/10.1037/0033-2909.112.1.155>
-
-Jaeger, B. C., Edwards, L. J., Das, K., & Sen, P. K. (2016). An R2 statistic for fixed effects in the generalized linear mixed model. Journal of Applied Statistics, 44(6), 1086–1105. https://doi.org/10.1080/02664763.2016.1193725
-
-Kuder, G. F., & Richardson, M. W. (1937). The theory of the estimation of test reliability. Psychometrika, 2(3), 151–160. https://doi.org/10.1007/BF02288391
-
-Nakagawa, S., & Schielzeth, H. (2013). A general and simple method for
-obtaining R2 from generalized linear mixed-effects models. Methods in
-Ecology and Evolution, 4(2), 133–142.
-<https://doi.org/10.1111/j.2041-210x.2012.00261.x>
-
-Nunnally, J. C. (1978). Psychometric Theory (2nd ed.). New York:
-McGraw-Hill.
-
-
-```{r extract-tables-efficient-with-loop, include=FALSE}
+```{r extract-tables, include=FALSE}
 # Define tables to be extracted and saved as Word documents. Each table is associated with a caption for clarity in the output documents.
 tables <- list(
   list(data = descriptives_table, caption = "Descriptive Statistics by Feedback Condition"),
   list(data = table_h1, caption = "Linear Mixed Model (H1)"),
   list(data = table_h2_1, caption = "Mediation Model of Perceived Helpfulness on Plan Quality Revision (H2.1)"), 
-  list(data = table_h2_2, caption = "Mediation Model of Perceived Motivation on Plan Quality Revision (H2.1)"), 
+  list(data = table_h2_2, caption = "Mediation Model of Perceived Motivation on Plan Quality Revision (H2.2)"), 
    list(data = table_clmm_full, caption = "Results of the Cumulative Link Mixed Model for Plan Quality")
+  # weitere Tabellen hier ergänzen
   
-  # weitere Tabellen hier ergänzen:
-  # list(data = table_h2, caption = "..."),
 )
 
 # Basis path
@@ -2743,6 +2751,33 @@ for (i in seq_along(tables)) {
   message("Saved: tab", i, ".docx")
 }
  
+ 
+ 
+##########################
+ ggsave(
+  filename = here("Tables_and_Figures", "rubric_distribution.tiff"),
+  plot = rubrics_visualization,
+  device = "pdf",
+  width = 8,      
+  height = 5.5,  
+  units = "in"
+)
+ 
 ```
 
+# References
 
+Cohen, J. (1992). A power primer. Psychological Bulletin, 112(1),
+155–159. <https://doi.org/10.1037/0033-2909.112.1.155>
+
+Jaeger, B. C., Edwards, L. J., Das, K., & Sen, P. K. (2016). An R2 statistic for fixed effects in the generalized linear mixed model. Journal of Applied Statistics, 44(6), 1086–1105. https://doi.org/10.1080/02664763.2016.1193725
+
+Kuder, G. F., & Richardson, M. W. (1937). The theory of the estimation of test reliability. Psychometrika, 2(3), 151–160. https://doi.org/10.1007/BF02288391
+
+Nakagawa, S., & Schielzeth, H. (2013). A general and simple method for
+obtaining R2 from generalized linear mixed-effects models. Methods in
+Ecology and Evolution, 4(2), 133–142.
+<https://doi.org/10.1111/j.2041-210x.2012.00261.x>
+
+Nunnally, J. C. (1978). Psychometric Theory (2nd ed.). New York:
+McGraw-Hill.
