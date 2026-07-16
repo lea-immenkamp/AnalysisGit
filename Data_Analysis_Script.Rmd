@@ -19,16 +19,15 @@ editor_options:
 
 # General Information
 
-This R Markdown file documents the data analysis procedures for the
+This file documents the data analysis procedures for the
 master thesis titled "How Children Engage with Adaptive AI Feedback:
 Effects of Framing, Perception and Receptivity on Plan Quality
 Improvement". It includes all steps required to prepare, describe, and
-analyze the study data. The code is structured to be clear and
-reproducible, with comments explaining the process. The analysis focuses
-on understanding how different types of AI feedback (instructive vs.
-dialogic) influence children’s plan quality improvement, motivation and
-perceived helpfulness, while accounting for their receptivity of the
-feedback.
+analyze the study data. Most code chunks are hidden in the rendered HTML output, so readers see a clean report of tables and figures rather than the underlying code. The full annotated code remains available in the source .Rmd file for transparency and reproducibility, with comments explaining the process. 
+
+The analysis focuses on understanding how different types of AI feedback (instructive vs.
+dialogic) influence children’s plan quality improvement, motivation and perceived helpfulness, while accounting for their receptivity of the feedback.
+
 
 ```{r general-information-script, include=FALSE}
 # This R Markdown file documents the data analysis procedures for the master thesis titled "How Children Engage with Adaptive AI Feedback: Effects of Framing, Perception and Receptivity on Plan Quality Improvement". It includes all steps required to prepare, describe, and analyze the study data. The code is structured to be clear and reproducible, with comments explaining the process. The analysis focuses on understanding how different types of AI feedback (instructive vs. dialogic) influence children’s plan quality improvement, motivation and perceived helpfulness, while accounting for their receptivity of the feedback.
@@ -87,8 +86,7 @@ Additional Analyses
 Distribution
 
 - Figure \@ref(fig:dimensions-visualization): Distribution of Scores Across Initial and Revised dimension Items
-- Figure \@ref(fig:spaghetti-plot): Spaghetti Plot on Child-level
-- Figure \@ref(fig:spaghetti-plot-for-planning-trial): Spaghetti Plot on Trial-level
+- Figure \@ref(fig:spaghetti-plot-for-trial): Spaghetti Plot on Trial-level
 - Figure \@ref(fig:visualization-perception): Distribution of Perceived Helpfulness and Motivation
 - Figure \@ref(fig:visualization-receptivity-plot): Distribution of Baseline Receptivity Items and Total Score
 
@@ -966,7 +964,7 @@ from 0 to 5. <i>N</i> = `r n_children_after` children, total observations =
 
 **Plan Quality Visualization**
 
-```{r spaghetti-plot-for-planning-trial, fig.cap="Spaghetti Plot on Trial-level", warning=FALSE}
+```{r spaghetti-plot-for-trial, fig.cap="Spaghetti Plot on Trial-level", warning=FALSE}
 # Prepare data for plotting: each line represents a single planning trial, with points representing the initial and revised plan quality scores. This allows for visualization of the change in plan quality from pre- to post-feedback at the trial level.
 spaghetti_data <- merged_data |>
   dplyr::select(child_id, trial_id, feedback_condition, initial_pq, revised_pq) |>
@@ -2075,7 +2073,7 @@ table_clmm_full |>
     stub.border.style = "none"
   )
 ```
-
+<small> *Note.* Reference category for feedback condition is instructive feedback. Time point is coded as pre-feedback and post-feedback. Odds ratios are reported with 95% confidence intervals. ICC = intraclass correlation coefficient; R² = variance explained by fixed effects (marginal) and by fixed + random effects (conditional). </small>
 
 ## Distribution of Plan Quality across Trials
 
@@ -2180,8 +2178,7 @@ kableExtra::kbl(
 variance evaluating the effect of trial ID on initial plan quality.
 Because trial_id has 6 levels, Mauchly's test for sphericity was
 conducted, *W* = `r fmt(summary(anova_initial)$sphericity.tests[1, "Test statistic"])`,
-*p* `r format_p(summary(anova_initial)$sphericity.tests[1, "p-value"])`; *F*, *p*, and η²_G are Greenhouse-Geisser corrected wherever
-sphericity was violated (ε < 1), as reflected in the ε (GG) column.
+*p* `r format_p(summary(anova_initial)$sphericity.tests[1, "p-value"])`; *F*, *p*, and η²_G are Greenhouse-Geisser corrected wherever sphericity was violated (ε < 1), as reflected in the ε (GG) column.
 
 
 ```{r trial-anova-revised-table}
@@ -2257,6 +2254,19 @@ summary(anova_initial_scenario)$pval.adjustments
 gg_eps_initial_scenario <- summary(anova_initial_scenario)$pval.adjustments[1, "GG eps"]
 
 pairs(emmeans(anova_initial_scenario, "scen_id"), adjust = "bonferroni")
+
+
+# Perform repeated measures ANOVA for revised_pq across scenarios using the aov_ez function from the afex package. This analysis will assess whether there are significant differences in plan quality based on scenario id, while accounting for the repeated measures design with child_id as the subject identifier.
+anova_revised_scenario <- aov_ez(id = "child_id",
+                                  dv = "revised_pq",
+                                  within = "scen_id",
+                                  data = merged_data)
+summary(anova_revised_scenario)
+summary(anova_revised_scenario)$sphericity.tests
+summary(anova_revised_scenario)$pval.adjustments
+gg_eps_revised_scenario <- summary(anova_revised_scenario)$pval.adjustments[1, "GG eps"]
+
+pairs(emmeans(anova_revised_scenario, "scen_id"), adjust = "bonferroni")
 ```
 
 
@@ -2286,6 +2296,31 @@ kableExtra::kbl(
 *Note*. Results are based on a one-way repeated measures analysis of variance evaluating the effect of scenario ID on revised plan quality.
 Because scenario has 6 levels, Mauchly's test for sphericity was conducted, *W* = `r fmt(summary(anova_initial_scenario)$sphericity.tests[1, "Test statistic"])`,
 *p* `r format_p(summary(anova_initial_scenario)$sphericity.tests[1, "p-value"])`; *F*, *p*, and η²_G are Greenhouse-Geisser corrected wherever sphericity was violated (ε < 1), as reflected in the ε (GG) column.
+
+
+```{r scenario-anova-revised-table}
+anova_revised_scenario_summary <- as.data.frame(anova_revised_scenario$anova_table) |>
+  tibble::rownames_to_column("Effect") |>
+  dplyr::transmute(
+    Effect,
+    `$df$` = paste(fmt(`num Df`, digits = 0), fmt(`den Df`, digits = 0), sep = ", "),
+    `$F$` = fmt(`F`),
+    `$p$` = format_p(`Pr(>F)`),
+    `$\\eta^2_G$` = fmt(ges, digits = 2),
+    `$\\varepsilon_{GG}$` = fmt(gg_eps_revised_scenario, digits = 2)
+  ) |>
+  dplyr::select(Effect, `$df$`,`$F$`, `$p$`, `$\\eta^2_G$`, `$\\varepsilon_{GG}$`)
+
+kableExtra::kbl(
+  anova_revised_scenario_summary,
+  caption = "Repeated Measures Anova for Revised Plan Quality across Scenarios"
+) |>
+  kable_classic(full_width = FALSE, html_font = "Times New Roman") |>
+  column_spec(1:5, extra_css = "padding: 10px;") |>
+  row_spec(0, extra_css = "text-align: center;")
+
+```
+*Note*. Results are based on a one-way repeated measures analysis of variance evaluating the effect of scenario ID on revised plan quality. Mauchly's test for sphericity was conducted, *W* = `r fmt(summary(anova_revised_scenario)$sphericity.tests[1, "Test statistic"])`, *p* `r format_p(summary(anova_revised_scenario)$sphericity.tests[1, "p-value"])`; *F*, *p*, and η²_G are Greenhouse-Geisser corrected wherever sphericity was violated (ε < 1), as reflected in the ε (GG) column.
 
 
 ## Distribution of Plan Quality by Gender
@@ -2356,7 +2391,7 @@ summary_data_gender <- long_data_gender |>
             .groups = 'drop')
 ```
 
-<small> *Note.* Results are based on a 2 (Time: initial vs. revised plan quality) × 2 (Gender: male, female) mixed-design ANOVA, with time as the within-subjects factor and gender as the between-subjects factor. The "other" gender category was not represented in the analytic sample (*n* = 0) and was therefore automatically dropped from the model. Because the within-subjects factor has only two levels, the sphericity assumption is trivially met and no Greenhouse-Geisser correction was required. </small>
+<small> *Note.* Results are based on a 2 (Time: initial vs. revised plan quality) × 2 (Gender: male, female) mixed-design ANOVA, with time as the within-subjects factor and gender as the between-subjects factor. The "other" gender category was not represented in the analytic sample (*n* = 0) and therefore dropped from the model. Because the within-subjects factor has only two levels, the sphericity assumption is trivially met and no Greenhouse-Geisser correction was required. </small>
 
 
 ```{r mixed-anova-gender-figure, fig.cap="Mixed Anova of Plan Quality"}
