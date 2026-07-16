@@ -86,7 +86,7 @@ Additional Analyses
 
 Distribution
 
-- Figure \@ref(fig:rubrics-visualization): Distribution of Scores Across Initial and Revised Rubric Items
+- Figure \@ref(fig:dimensions-visualization): Distribution of Scores Across Initial and Revised dimension Items
 - Figure \@ref(fig:spaghetti-plot): Spaghetti Plot on Child-level
 - Figure \@ref(fig:spaghetti-plot-for-planning-trial): Spaghetti Plot on Trial-level
 - Figure \@ref(fig:visualization-perception): Distribution of Perceived Helpfulness and Motivation
@@ -704,18 +704,18 @@ codebook_table <- tribble(
   "scen_id", "Scenario ID", "Six different scenarios in randomized order",
   "scen_name", "Scenario Name", "Name/content of the scenario by trial",
   "feedback_condition", "Feedback Condition", "Instructive vs. dialogic feedback",
-  "in_sp", "Initial Specificity", "Dummy-coded rubric for plan specificity (whether the plan precisely specifies a situational cue or a specific activity)",
-  "in_ex", "Initial Externality", "Dummy-coded rubric for plan externality (whether the cue originates from the environment rather than internal states)",
-  "in_sa", "Initial Salience", "Dummy-coded rubric for plan salience (whether the cue is sufficiently noticeable to trigger action)",
-  "in_ap", "Initial Appropriateness", "Dummy-coded rubric for plan appropriateness (whether the context supports the initiation of the goal without major distractions)",
-  "in_tp", "Initial Temporal Precision", "Dummy-coded rubric for temporal precision (the exactness of the timing regarding the situational trigger)",
-  "initial_pq", "Initial Plan Quality", "Sum of five initial rubrics (0–5)",
-  "re_sp", "Revised Specificity", "Dummy-coded rubric for plan specificity",
-  "re_ex", "Revised Externality", "Dummy-coded rubric for plan externality",
-  "re_sa", "Revised Salience", "Dummy-coded rubric for plan salience",
-  "re_ap", "Revised Appropriateness", "Dummy-coded rubric for plan appropriateness",
-  "re_tp", "Revised Temporal Precision", "Dummy-coded rubric for temporal precision",
-  "revised_pq", "Revised Plan Quality", "Sum of five revised rubrics (0–5)",
+  "in_sp", "Initial Specificity", "Dummy-coded dimension for plan specificity (whether the plan precisely specifies a situational cue or a specific activity)",
+  "in_ex", "Initial Externality", "Dummy-coded dimension for plan externality (whether the cue originates from the environment rather than internal states)",
+  "in_sa", "Initial Salience", "Dummy-coded dimension for plan salience (whether the cue is sufficiently noticeable to trigger action)",
+  "in_ap", "Initial Appropriateness", "Dummy-coded dimension for plan appropriateness (whether the context supports the initiation of the goal without major distractions)",
+  "in_tp", "Initial Temporal Precision", "Dummy-coded dimension for temporal precision (the exactness of the timing regarding the situational trigger)",
+  "initial_pq", "Initial Plan Quality", "Sum of five initial dimensions (0–5)",
+  "re_sp", "Revised Specificity", "Dummy-coded dimension for plan specificity",
+  "re_ex", "Revised Externality", "Dummy-coded dimension for plan externality",
+  "re_sa", "Revised Salience", "Dummy-coded dimension for plan salience",
+  "re_ap", "Revised Appropriateness", "Dummy-coded dimension for plan appropriateness",
+  "re_tp", "Revised Temporal Precision", "Dummy-coded dimension for temporal precision",
+  "revised_pq", "Revised Plan Quality", "Sum of five revised dimensions (0–5)",
   "pq_improvement", "Plan Quality Improvement", "Difference: revised_pq - initial_pq",
   "perct_moti", "Perceived Motivation", "Perceived motivation of feedback (1–4)",
   "perct_help", "Perceived Helpfulness", "Perceived helpfulness of feedback (1–4)",
@@ -820,10 +820,10 @@ Before conducting the analysis, the data distribution was inspected to
 gain an understanding of the characteristics of the dataset.
 
 
-## Distribution of Plan Quality Rubrics
+## Distribution of Plan Quality dimensions
 
-```{r rubrics-distribution, include=FALSE}
-# Extract rubric items
+```{r dimensions-distribution, include=FALSE}
+# Extract dimension items
 initial_items <- merged_data |> 
   select(in_sp, in_ex, in_sa, in_ap, in_tp)
 revised_items <- merged_data  |> 
@@ -839,17 +839,17 @@ print(sapply(revised_items, var))
 
 Plans (Initial and Revised) were rated on five dimensions:
 
-- appropriateness
-- externality
-- salience
-- specificity
-- temporal precision
+- specificity (whether the plan precisely specifies a situational cue or a specific activity)
+- externality (whether the cue originates from the environment rather than internal states)
+- salience (whether the cue is sufficiently noticeable to trigger action)
+- appropriateness (whether the context supports the initiation of the goal without major distractions)
+- temporal precision (the exactness of the timing regarding the situational trigger)
 
-```{r rubrics-visualization, fig.cap="Distribution of Scores Across Initial and Revised Rubric Items"}
-# Visualize the distribution of the five plan-quality rubric items (0/1) separately
+```{r dimensions-visualization, fig.cap="Distribution of Scores Across Initial and Revised dimension Items"}
+# Visualize the distribution of the five plan-quality dimension items (0/1) separately
 # for initial and revised plans, to inspect item-level floor/ceiling effects that a
 # single summed score (initial_pq/revised_pq) would otherwise mask
-rubrics_visualization <- bind_cols(initial_items, revised_items) |>
+dimensions_visualization <- bind_cols(initial_items, revised_items) |>
   pivot_longer(cols = everything(), names_to = "item", values_to = "score") |>
   mutate(
     type = case_when(
@@ -859,11 +859,16 @@ rubrics_visualization <- bind_cols(initial_items, revised_items) |>
     type = factor(type, levels = c("Initial Plan", "Revised Plan")),
     item = recode_values(
       item,
-      c("in_ap", "re_ap") ~ "appropriateness",
+      c("in_sp", "re_sp") ~ "specificity",
       c("in_ex", "re_ex") ~ "externality",
       c("in_sa", "re_sa") ~ "salience",
-      c("in_sp", "re_sp") ~ "specificity",
+      c("in_ap", "re_ap") ~ "appropriateness",
       c("in_tp", "re_tp") ~ "temporal precision"
+    ),
+    item = factor(
+      item,
+      levels = c("specificity", "externality", "salience",
+                 "appropriateness", "temporal precision")
     )
   ) |>
   ggplot(aes(x = item, fill = factor(score))) +
@@ -877,18 +882,20 @@ rubrics_visualization <- bind_cols(initial_items, revised_items) |>
     strip.placement = "outside",
     panel.spacing = unit(1, "lines")
   )
+
+dimensions_visualization
 ```
 
 <small> *Note*. Bars show the frequency of plans meeting (1) or not
-meeting (0) each rubric criterion. Initial Plan ratings were assigned
+meeting (0) each dimension criterion. Initial Plan ratings were assigned
 before feedback. Revised Plan ratings were assigned after feedback.
-Frequencies are based on `r n_trials_after` observations for each rubric (`r n_children_after` children
-× 6 trials - `r n_trials_dropped_from_retained_children` trial). </small>
+Frequencies are based on `r n_trials_after` observations for each dimension (`r n_children_after` children
+× 6 trials - `r n_trials_dropped_from_retained_children` trials). </small>
 
 
 
-```{r rubrics-scale-reliability, include=FALSE}
-# Internal consistency of the initial/revised rubric scales (KR-20, since the five rubric items are dichotomously coded). Computed here, reported as inline text below the figure rather than as a standalone table, since only two numbers result.
+```{r dimensions-scale-reliability, include=FALSE}
+# Internal consistency of the initial/revised dimension scales (KR-20, since the five dimension items are dichotomously coded). Computed here, reported as inline text below the figure rather than as a standalone table, since only two numbers result.
 alpha_initial <- psych::alpha(initial_items)
 alpha_revised <- psych::alpha(revised_items)
 ```
@@ -896,7 +903,7 @@ alpha_revised <- psych::alpha(revised_items)
 - Internal consistency was acceptable for the initial plan quality
   scale (α = `r fmt_bounded(alpha_initial$total$raw_alpha, 2)`) but
   below the threshold of α = .70 (Nunnally, 1978) for the revised scale (α = `r fmt_bounded(alpha_revised$total$raw_alpha, 2)`),
-  indicating comparatively lower reliability of the revised rubric items. Because the
+  indicating comparatively lower reliability of the revised dimension items. Because the
   five items are dichotomously coded (0 = not met, 1 = met), Cronbach's alpha here is
   mathematically equivalent to the Kuder-Richardson Formula 20 (KR-20) coefficient
   (Kuder & Richardson, 1937).
@@ -951,7 +958,7 @@ kableExtra::kbl(
 ```
 
 <small> *Note.* PQ= Plan Quality. Scores were calculated by summing the
-five dichotomous rubric items (0 = criterion not met, 1 = criterion met)
+five dichotomous dimension items (0 = criterion not met, 1 = criterion met)
 for the initial and revised plans, resulting in a total score ranging
 from 0 to 5. <i>N</i> = `r n_children_after` children, total observations =
 `r n_trials_after` for initial and revised plan quality each. </small>
@@ -959,77 +966,105 @@ from 0 to 5. <i>N</i> = `r n_children_after` children, total observations =
 
 **Plan Quality Visualization**
 
-Spaghetti plots showing the change in plan quality from pre- to
-post-feedback, separately for instructive and dialogic feedback
-conditions. A black line depicts the median improvement within each
-feedback condition. Child-level and trial-level (see fig 2) plots are provided to visualize the data at different levels of aggregation.
-
-
 ```{r spaghetti-plot-for-planning-trial, fig.cap="Spaghetti Plot on Trial-level", warning=FALSE}
 # Prepare data for plotting: each line represents a single planning trial, with points representing the initial and revised plan quality scores. This allows for visualization of the change in plan quality from pre- to post-feedback at the trial level.
-spaghetti_data <- merged_data |> 
-  dplyr::select(child_id, trial_id, feedback_condition, initial_pq, revised_pq) |> 
-  tidyr::pivot_longer(
-    cols = c(initial_pq, revised_pq),
-    names_to = "Time",
-    values_to = "Plan_Quality"
-  ) |> 
+spaghetti_data <- merged_data |>
+  dplyr::select(child_id, trial_id, feedback_condition, initial_pq, revised_pq) |>
+  dplyr::filter(!is.na(feedback_condition), !is.na(initial_pq), !is.na(revised_pq)) |>
   mutate(
-    Time = recode_values (Time,
-  "initial_pq" ~ "Pre-Feedback",
-  "revised_pq" ~ "Post-Feedback"
-  ),
-    Time = factor(
-      Time,
-      levels = c("Pre-Feedback", "Post-Feedback")
-    ),
     feedback_condition = factor(
       feedback_condition,
       levels = c("instructive", "dialogic"),
       labels = c("instructive Feedback", "dialogic Feedback")
+    )
+  ) |>
+  tidyr::pivot_longer(
+    cols = c(initial_pq, revised_pq),
+    names_to = "Time",
+    values_to = "Plan_Quality"
+  ) |>
+  mutate(
+    Time = recode_values(
+      Time,
+      "initial_pq" ~ "Pre-Feedback",
+      "revised_pq" ~ "Post-Feedback"
     ),
-    Trial_Group = paste(child_id, trial_id, sep = "_"),
-    Participant = factor(child_id)
-  ) |> 
-  dplyr::filter(!is.na(feedback_condition), !is.na(Plan_Quality))
+    Time = factor(Time, levels = c("Pre-Feedback", "Post-Feedback"))
+  )
 
-# create spaghetti plot with ggplot2
-pq_trial_level <- ggplot(
-  spaghetti_data,
-  aes(x = Time, y = Plan_Quality, group = Trial_Group, color = Participant)
-) +
-  geom_line(alpha = 0.6, linewidth = 0.25) +
-  geom_point(size = 0.8, alpha = 0.6) +
+# Plan quality is an integer 0-5 sum score, so only 6 x 6 = 36 distinct (Pre, Post) trajectories are possible: many trials share an identical path and would otherwise overlap invisibly in a plain spaghetti plot. Counting trials per unique trajectory lets line width reveal this overplotting instead of hiding it, and replaces the previous colour-by-child mapping, which was uninformative with 169 factor levels.
+transition_counts <- merged_data |>
+  dplyr::select(feedback_condition, initial_pq, revised_pq) |>
+  dplyr::filter(!is.na(feedback_condition), !is.na(initial_pq), !is.na(revised_pq)) |>
+  mutate(
+    feedback_condition = factor(
+      feedback_condition,
+      levels = c("instructive", "dialogic"),
+      labels = c("instructive Feedback", "dialogic Feedback")
+    )
+  ) |>
+  dplyr::count(feedback_condition, initial_pq, revised_pq, name = "n_trials") |>
+  mutate(transition_id = dplyr::row_number()) |>
+  tidyr::pivot_longer(
+    cols = c(initial_pq, revised_pq),
+    names_to = "Time",
+    values_to = "Plan_Quality"
+  ) |>
+  mutate(
+    Time = recode_values(
+      Time,
+      "initial_pq" ~ "Pre-Feedback",
+      "revised_pq" ~ "Post-Feedback"
+    ),
+    Time = factor(Time, levels = c("Pre-Feedback", "Post-Feedback"))
+  )
+
+# create spaghetti plot with ggplot2: line width encodes the number of trials behind each trajectory; the median (computed on the unaggregated trial data) is overlaid in bold black.
+pq_trial_level <- ggplot() +
+  geom_line(
+    data = transition_counts,
+    aes(x = Time, y = Plan_Quality, group = transition_id, linewidth = n_trials),
+    color = "steelblue4", alpha = 0.5, lineend = "round"
+  ) +
+  geom_point(
+    data = transition_counts,
+    aes(x = Time, y = Plan_Quality),
+    color = "steelblue4", alpha = 0.5, size = 1.2
+  ) +
   stat_summary(
+    data = spaghetti_data,
+    aes(x = Time, y = Plan_Quality, group = 1),
     fun = median,
     geom = "line",
-    aes(group = 1),
     color = "black",
     linewidth = 0.8
   ) +
   stat_summary(
+    data = spaghetti_data,
+    aes(x = Time, y = Plan_Quality, group = 1),
     fun = median,
     geom = "point",
-    aes(group = 1),
     color = "black",
     size = 1
   ) +
   facet_wrap(~ feedback_condition, nrow = 1) +
   scale_y_continuous(breaks = 0:5, limits = c(0, 5)) +
-   labs(
+  scale_linewidth(range = c(0.3, 2.5), name = "Trials per\ntrajectory") +
+  labs(
     x = "Time",
     y = "Plan Quality (0–5)") +
-  theme_thesis() 
-
+  theme_thesis()
 
 pq_trial_level
 ```
-
-<small> *Note.* Each line in the plots represents a single planning
-trial rather than an individual participant. As each child completed
+<small> *Note.* Each line represents one of the possible (Pre-Feedback,
+Post-Feedback) score trajectories. Line width is proportional to the
+number of trials sharing that exact trajectory, so thicker lines
+indicate more common patterns of change. As each child completed
 multiple trials, several lines correspond to the same participant within
-each feedback condition. The bold black line shows the median
-improvement. </small>
+each feedback condition. The bold black line shows the
+median improvement, computed across all individual trials. </small>
+
 
 ## Distribution of Perceived Usefulness
 
@@ -1308,7 +1343,7 @@ ggplot(feedback_receptivity_long, aes(x = Measure, y = Score, fill = Measure)) +
   coord_cartesian(ylim = c(1, 5)) +
   labs(
     x = "Questionnaire Measure",
-    y = "Rating (1-5)"
+    y = "Receptivity Score"
   ) +
   theme_thesis() +
   theme(
@@ -1334,7 +1369,7 @@ print(reliability_receptivity)
 
 - The overall scale reliability indicated a Cronbach's alpha of <i>α</i>
   = `r fmt(reliability_receptivity$total$raw_alpha, 2)`.
-- Item-deletion diagnostics revealed that the reverse-coded fourth item
+- Item-deletion diagnostics revealed that the reverse-coded fourth item (behavioral engagement)
   retained a low corrected item-total correlation
   (<i>r</i> = `r fmt(reliability_receptivity$item.stats["recep_q4_r", "r.drop"], 2)`).
   Dropping this item optimized the scale's internal consistency to a
@@ -1432,18 +1467,14 @@ kbl(descriptives_table,
 
 ```
 
-<small> *Note.* PQ = Plan
-Quality. IPR = Interpercentile range (25th–75th percentile). Initial and Revised Plans
-were evaluated across five plan-quality dimensions. Each dimension was
-scored dichotomously (0 = criterion not met, 1 = criterion met). The
-scores were summed to create a total plan-quality score ranging from 0
-to 5. Improvement was calculated as the difference between revised and
-initial plan quality scores. Perceived Helpfulness/Motivation and
-Receptivity are based on participants’ within-person mean scores
+<small> *Note.* PQ = Plan Quality. IPR = Interpercentile range (25th–75th percentile). 
+Plan-quality scores ranged from from 0 to 5. Improvement was calculated as the difference between revised and
+initial plan quality scores. 
+Perceived Helpfulness/Motivation are based on participants’ within-person mean scores
 aggregated across the three trials within each Feedback condition.
 Perception ratings ranged from 1 (“not at all”) to 4 (“very helpful” /
 “very motivating”). Receptivity ratings ranged from 1 (“not at all
-receptive”) to 5 (“very receptive”)." </small>
+receptive”) to 5 (“very receptive”) over both conditions." </small>
 
 # Hypotheses Testing
 
