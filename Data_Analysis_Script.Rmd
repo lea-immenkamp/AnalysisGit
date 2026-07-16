@@ -405,7 +405,6 @@ kableExtra::kbl(
 
 - All other variables are fully observed and have no missing values.
 
-
 ```{r data-preparation, cache=TRUE}
 # Central variable preparation. All variables are centered and recoded here, so that the final dataset is ready for analysis.
 merged_data <- merged_data |> 
@@ -844,7 +843,7 @@ Plans (Initial and Revised) were rated on five dimensions:
 - externality
 - salience
 - specificity
-- temporal precisionS
+- temporal precision
 
 ```{r rubrics-visualization, fig.cap="Distribution of Scores Across Initial and Revised Rubric Items"}
 # Visualize the distribution of the five plan-quality rubric items (0/1) separately
@@ -858,7 +857,7 @@ rubrics_visualization <- bind_cols(initial_items, revised_items) |>
       TRUE ~ "Revised Plan"
     ),
     type = factor(type, levels = c("Initial Plan", "Revised Plan")),
-    item = case_match(
+    item = recode_values(
       item,
       c("in_ap", "re_ap") ~ "appropriateness",
       c("in_ex", "re_ex") ~ "externality",
@@ -901,8 +900,6 @@ alpha_revised <- psych::alpha(revised_items)
   five items are dichotomously coded (0 = not met, 1 = met), Cronbach's alpha here is
   mathematically equivalent to the Kuder-Richardson Formula 20 (KR-20) coefficient
   (Kuder & Richardson, 1937).
-
-
 
 ## Distribution of Plan Quality
 
@@ -965,80 +962,7 @@ from 0 to 5. <i>N</i> = `r n_children_after` children, total observations =
 Spaghetti plots showing the change in plan quality from pre- to
 post-feedback, separately for instructive and dialogic feedback
 conditions. A black line depicts the median improvement within each
-feedback condition. Child-level (see fig 2) and trial-level (see fig 3) plots are provided to visualize the data at different levels of aggregation.
-
-- CHECK AGAIN WHETHER THIS PLOT IS REALLY NECESSARY, OR WHETHER IT IS REDUNDANT WITH THE TABLE ABOVE. FURTHER: MORE THAN 8 COLOURS ARE CONFUSING 
-
-```{r spaghetti-plot, fig.cap="Spaghetti Plot on Child-level", warning=FALSE}
-# Prepare data for plotting: each line represents a single child, with points representing the mean initial and revised plan quality scores. This allows for visualization of the change in plan quality from pre- to post-feedback at the child level.
-child_means <- merged_data |> 
-  dplyr::select(
-    child_id,
-    feedback_condition,
-    initial_pq,
-    revised_pq
-  ) |> 
-  mutate(
-    feedback_condition = factor(
-      feedback_condition,
-      levels = c("instructive", "dialogic"),
-      labels = c("instructive Feedback", "dialogic Feedback")
-    )
-  ) |> 
-  pivot_longer(
-    cols = c(initial_pq, revised_pq),
-    names_to = "Time",
-    values_to = "PlanQuality"
-  ) |> 
-  mutate(
-    Time = case_match(
-      Time,
-      "initial_pq" ~ "Pre-Feedback",
-      "revised_pq" ~ "Post-Feedback"
-    ),
-    Time = factor(Time, levels = c("Pre-Feedback", "Post-Feedback"))
-  ) |> 
-  group_by(child_id, feedback_condition, Time) |> 
-  summarise(
-    MeanPQ = mean(PlanQuality, na.rm = TRUE),
-    .groups = "drop"
-  ) |> 
-  mutate(Participant = factor(child_id))
-
-# create spaghetti plot with ggplot2
-pq_child_level <- ggplot(
-  child_means,
-  aes(x = Time, y = MeanPQ, group = Participant, color = Participant)
-) +
-  geom_line(alpha = 0.6, linewidth = 0.25) +
-  geom_point(size = 0.8, alpha = 0.6) +
-  stat_summary(
-    fun = median,
-    geom = "line",
-    aes(group = 1),
-    color = "black",
-    linewidth = 0.8
-  ) +
-  stat_summary(
-    fun = median,
-    geom = "point",
-    aes(group = 1),
-    color = "black",
-    size = 1
-  ) +
-  facet_wrap(~ feedback_condition, nrow = 1) +
-  scale_y_continuous(breaks = 0:5, limits = c(0, 5)) +
-  labs(
-    x = "Time",
-    y = "Plan Quality (0–5)") +
-   theme_thesis() 
-
-pq_child_level 
-```
-
-<small> *Note*. Each line represents a single child. Because every child completed three trials per feedback condition, plan‑quality scores were averaged within child and condition for the pre‑feedback and post‑feedback phases. Thus, each child contributes exactly one
-pre‑feedback value and one post‑feedback value per feedback condition. The black line depicts the median change across children.
-It is based on the same data as the table above, but visualizes the change in plan quality at the child level rather than the trial level. </small>
+feedback condition. Child-level and trial-level (see fig 2) plots are provided to visualize the data at different levels of aggregation.
 
 
 ```{r spaghetti-plot-for-planning-trial, fig.cap="Spaghetti Plot on Trial-level", warning=FALSE}
@@ -1051,7 +975,7 @@ spaghetti_data <- merged_data |>
     values_to = "Plan_Quality"
   ) |> 
   mutate(
-    Time = case_match (Time,
+    Time = recode_values (Time,
   "initial_pq" ~ "Pre-Feedback",
   "revised_pq" ~ "Post-Feedback"
   ),
@@ -1125,7 +1049,7 @@ perception_within <- merged_data |>
     .groups = "drop"
   ) |> 
   mutate(
-    feedback_condition = case_match(
+    feedback_condition = recode_values(
       feedback_condition,
       "instructive" ~ "instructive Feedback",
       "dialogic"    ~ "dialogic Feedback")
@@ -1141,7 +1065,7 @@ perception_long <- perception_within |>
     values_to = "Score"
   ) |> 
   mutate(
-    Perception_Type = case_match(
+    Perception_Type = recode_values(
       Perception_Type,
       "Helpfulness_Mean" ~ "Perceived Helpfulness",
       "Motivation_Mean" ~ "Perceived Motivation"
@@ -1201,7 +1125,7 @@ will be conducted.
 # Prepare data for assumption checks and inferential tests by reshaping the perception data to a wide format, allowing for the calculation of difference scores between dialogic and instructive feedback conditions for perceived helpfulness and motivation.
 perception_wide <- perception_within |> 
   mutate(
-    feedback_condition = case_match(
+    feedback_condition = recode_values(
       feedback_condition,
       "instructive Feedback" ~ "instructive",
       "dialogic Feedback" ~ "dialogic"
@@ -1353,7 +1277,7 @@ feedback_receptivity_long <- merged_data |>
     values_to = "Score"
   ) |> 
   mutate(
-    Measure = case_match(
+    Measure = recode_values(
       Measure,
       "recep_q1"    ~ "Experiential Attitudes",
       "recep_q2"    ~ "Instrumental Attitudes",
@@ -1480,7 +1404,7 @@ descriptives_table <- merged_data |>
     values_from = value
   ) |> 
   mutate(
-    Statistik = case_match(
+    Statistik = recode_values(
       Statistik, 
       "MSD" ~ "M (SD)", 
       "Med" ~ "Med [IPR]"),
@@ -2137,7 +2061,7 @@ long_data <- merged_data |>
                names_to = "time", 
                values_to = "planquality") |> 
   
-  mutate(time = case_match(time,
+  mutate(time = recode_values(time,
                             "initial_pq" ~ "Initial Plan",
                             "revised_pq" ~ "Revised Plan"))
 
@@ -2731,7 +2655,7 @@ tables <- list(
   list(data = table_h1, caption = "Linear Mixed Model (H1)"),
   list(data = table_h2_1, caption = "Mediation Model of Perceived Helpfulness on Plan Quality Revision (H2.1)"), 
   list(data = table_h2_2, caption = "Mediation Model of Perceived Motivation on Plan Quality Revision (H2.2)"), 
-   list(data = table_clmm_full, caption = "Results of the Cumulative Link Mixed Model for Plan Quality")
+  list(data = table_clmm_full, caption = "Results of the Cumulative Link Mixed Model for Plan Quality")
   # weitere Tabellen hier ergänzen
   
 )
@@ -2754,16 +2678,7 @@ for (i in seq_along(tables)) {
 }
  
  
- 
-##########################
- ggsave(
-  filename = here("Tables_and_Figures", "rubric_distribution.tiff"),
-  plot = rubrics_visualization,
-  device = "pdf",
-  width = 8,      
-  height = 5.5,  
-  units = "in"
-)
+
  
 ```
 
