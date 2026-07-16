@@ -30,6 +30,10 @@ dialogic) influence children’s plan quality improvement, motivation and
 perceived helpfulness, while accounting for their receptivity of the
 feedback.
 
+```{r general-information-script, include=FALSE}
+# This R Markdown file documents the data analysis procedures for the master thesis titled "How Children Engage with Adaptive AI Feedback: Effects of Framing, Perception and Receptivity on Plan Quality Improvement". It includes all steps required to prepare, describe, and analyze the study data. The code is structured to be clear and reproducible, with comments explaining the process. The analysis focuses on understanding how different types of AI feedback (instructive vs. dialogic) influence children’s plan quality improvement, motivation and perceived helpfulness, while accounting for their receptivity of the feedback.
+```
+
 
 # List of Tables
 
@@ -399,7 +403,7 @@ kableExtra::kbl(
   kableExtra::kable_styling(full_width = FALSE, font_size = 11)
 ```
 
-- Other variables (e.g., perceived helpfulness, age) are fully observed and have no missing values.
+- All other variables are fully observed and have no missing values.
 
 
 ```{r data-preparation, cache=TRUE}
@@ -453,12 +457,10 @@ merged_data <- merged_data |>
   dplyr::select(
     child_id, trial_id,
     age, gender,
-    scen_id,
+    scen_id, scen_name,
     feedback_condition,
-    in_sp, in_ex, in_sa, in_ap, in_tp, 
-    re_sp, re_ex, re_sa, re_ap, re_tp, 
-    initial_pq,
-    revised_pq,
+    in_sp, in_ex, in_sa, in_ap, in_tp, initial_pq,
+    re_sp, re_ex, re_sa, re_ap, re_tp, revised_pq,
     pq_improvement,
     perct_moti, perct_help, receptivity,
     starts_with("recep_q"),
@@ -701,12 +703,13 @@ codebook_table <- tribble(
   "age", "Age", "Age of the participant",
   "gender", "Gender", "1 = Male, 2 = Female, 3 = Other",
   "scen_id", "Scenario ID", "Six different scenarios in randomized order",
+  "scen_name", "Scenario Name", "Name/content of the scenario by trial",
   "feedback_condition", "Feedback Condition", "Instructive vs. dialogic feedback",
-  "in_sp", "Initial Specificity", "Dummy-coded rubric for plan specificity",
-  "in_ex", "Initial Externality", "Dummy-coded rubric for plan externality",
-  "in_sa", "Initial Salience", "Dummy-coded rubric for plan salience",
-  "in_ap", "Initial Appropriateness", "Dummy-coded rubric for plan appropriateness",
-  "in_tp", "Initial Temporal Precision", "Dummy-coded rubric for temporal precision",
+  "in_sp", "Initial Specificity", "Dummy-coded rubric for plan specificity (whether the plan precisely specifies a situational cue or a specific activity)",
+  "in_ex", "Initial Externality", "Dummy-coded rubric for plan externality (whether the cue originates from the environment rather than internal states)",
+  "in_sa", "Initial Salience", "Dummy-coded rubric for plan salience (whether the cue is sufficiently noticeable to trigger action)",
+  "in_ap", "Initial Appropriateness", "Dummy-coded rubric for plan appropriateness (whether the context supports the initiation of the goal without major distractions)",
+  "in_tp", "Initial Temporal Precision", "Dummy-coded rubric for temporal precision (the exactness of the timing regarding the situational trigger)",
   "initial_pq", "Initial Plan Quality", "Sum of five initial rubrics (0–5)",
   "re_sp", "Revised Specificity", "Dummy-coded rubric for plan specificity",
   "re_ex", "Revised Externality", "Dummy-coded rubric for plan externality",
@@ -721,6 +724,7 @@ codebook_table <- tribble(
   "recep_q2", "Receptivity Item 2", "Instrumental attitudes subscale",
   "recep_q3", "Receptivity Item 3", "Cognitive engagement subscale",
   "recep_q4", "Receptivity Item 4", "Behavioral engagement subscale",
+  "recep_q4_r", "Receptivity Item 4 (Reverse-coded)", "Reverse-coded behavioral engagement subscale",
   "receptivity", "Receptivity (Mean)", "Mean of 4 items (1–5)"
 )
 
@@ -963,6 +967,7 @@ post-feedback, separately for instructive and dialogic feedback
 conditions. A black line depicts the median improvement within each
 feedback condition. Child-level (see fig 2) and trial-level (see fig 3) plots are provided to visualize the data at different levels of aggregation.
 
+- CHECK AGAIN WHETHER THIS PLOT IS REALLY NECESSARY, OR WHETHER IT IS REDUNDANT WITH THE TABLE ABOVE. FURTHER: MORE THAN 8 COLOURS ARE CONFUSING 
 
 ```{r spaghetti-plot, fig.cap="Spaghetti Plot on Child-level", warning=FALSE}
 # Prepare data for plotting: each line represents a single child, with points representing the mean initial and revised plan quality scores. This allows for visualization of the change in plan quality from pre- to post-feedback at the child level.
@@ -1031,12 +1036,9 @@ pq_child_level <- ggplot(
 pq_child_level 
 ```
 
-<small> *Note*. Each line represents a single child. Because every child
-completed three trials per feedback condition, plan‑quality scores were
-averaged within child and condition for the pre‑feedback and
-post‑feedback phases. Thus, each child contributes exactly one
-pre‑feedback value and one post‑feedback value per feedback condition.
-The black line depicts the median change across children. </small>
+<small> *Note*. Each line represents a single child. Because every child completed three trials per feedback condition, plan‑quality scores were averaged within child and condition for the pre‑feedback and post‑feedback phases. Thus, each child contributes exactly one
+pre‑feedback value and one post‑feedback value per feedback condition. The black line depicts the median change across children.
+It is based on the same data as the table above, but visualizes the change in plan quality at the child level rather than the trial level. </small>
 
 
 ```{r spaghetti-plot-for-planning-trial, fig.cap="Spaghetti Plot on Trial-level", warning=FALSE}
