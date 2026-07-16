@@ -1749,7 +1749,7 @@ render_mediation_kbl(table_h2_1, caption = "Perceived Helpfulness as Mediator be
 ```
 
 <small> *Note.* Instructive feedback serves as the reference category for
-feedback condition. Perceived helpfulness serves as Mediator and was
+feedback condition. Perceived helpfulness serves as mediator and was
 centered as well as the covariate. <i>b</i> = unstandardized estimate;
 <i>𝛽</i> = standardized estimate. 95% CI bounds correspond to
 unstandardized effects (calculated via cluster bootstrap at the child
