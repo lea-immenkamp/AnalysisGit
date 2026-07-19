@@ -1620,7 +1620,7 @@ model_h1 <- lmerTest::lmer(
 
 ```{r RQ1-effect-sizes}
 # Intraclass correlation coefficient to examine the proportion of variance explained by the random effect of child
-performance::icc(model_h1)
+icc_h1 <- performance::icc(model_h1)
 
 # Calculate effect sizes for the linear mixed model, including marginal and conditional R² values, as well as semi-partial R² and f² for each predictor. This provides insight into the variance explained by fixed effects alone and by both fixed and random effects combined.
 effect_sizes_h1 <- extract_effect_sizes(model_h1)
@@ -1643,7 +1643,7 @@ render_lmm_gt(table_h1, caption = "Linear Mixed Model Predicting Revised Plan Qu
 <small> *Note.* <i>N</i> = `r n_children_after` children, total observations =
 `r n_trials_after` trials. Instructive feedback serves as the reference
 category for feedback condition. PQ = Plan Quality. CI = confidence interval; <i>LL</i> =
-lower limit; <i>UL</i> = upper limit. 
+lower limit; <i>UL</i> = upper limit. ICC = `r fmt_bounded(icc_h1$ICC_adjusted)`.
 R²m = `r fmt_bounded(effect_sizes_h1$r2_marginal)`,
 R²c = `r fmt_bounded(effect_sizes_h1$r2_conditional)`. </small>
 
@@ -1750,7 +1750,7 @@ render_mediation_kbl(table_h2_1, caption = "Perceived Helpfulness as Mediator be
 
 <small> *Note.* Instructive feedback serves as the reference category for
 feedback condition. Perceived helpfulness serves as mediator and was
-centered as well as the covariate. <i>b</i> = unstandardized estimate;
+centered as well as the covariates. <i>b</i> = unstandardized estimate;
 <i>𝛽</i> = standardized estimate. 95% CI bounds correspond to
 unstandardized effects (calculated via cluster bootstrap at the child
 level). <i>R²</i><sub>mediator</sub> = `r fmt_bounded(r2_h21["perct_help_c"])`,
@@ -1818,8 +1818,8 @@ table_h2_2 <- extract_mediation_table(fit_h22, descriptions = c(
 render_mediation_kbl(table_h2_2, caption = "Perceived Motivation as Mediator between Feedback Condition and Revised Plan Quality (H2.2)")
 ```
 <small> *Note.* Instructive feedback serves as the reference category for
-feedback condition. Perceived helpfulness serves as Mediator and was
-centered as well as the covariate. <i>b</i> = unstandardized estimate;
+feedback condition. Perceived motivation serves as Mediator and was
+centered as well as the covariates. <i>b</i> = unstandardized estimate;
 <i>𝛽</i> = standardized estimate. 95% CI bounds correspond to
 unstandardized effects (calculated via cluster bootstrap at the child
 level). <i>R²</i><sub>mediator</sub> = `r fmt_bounded(r2_h22["perct_moti_c"])`,
@@ -1874,7 +1874,7 @@ summary(model_h3)
 
 ```{r RQ3-effect-sizes}
 # Intraclass correlation coefficient to examine the proportion of variance explained
-performance::icc(model_h3)
+icc_h3 <- performance::icc(model_h3)
 
 # Calculate effect sizes for the linear mixed model, including marginal and conditional R² values, as well as semi-partial R² and f² for each predictor. This provides insight into the variance explained by fixed effects alone and by both fixed and random effects combined.
 effect_sizes_h3 <- extract_effect_sizes(model_h3)
@@ -1899,7 +1899,7 @@ render_lmm_gt(table_h3, caption = "Linear Mixed Model Testing the Moderating Rol
 <small> *Note.* <i>N</i> = `r n_children_after` children, total observations =
 `r n_trials_after` trials. Instructive feedback serves as the reference
 category for feedback condition. PQ = Plan Quality. CI = confidence interval; <i>LL</i> =
-lower limit; <i>UL</i> = upper limit. 
+lower limit; <i>UL</i> = upper limit. ICC = `r fmt_bounded(icc_h3$ICC_adjusted)`.
 R²m =`r fmt_bounded(effect_sizes_h3$r2_marginal)`, R²c =
 + `r fmt_bounded(effect_sizes_h3$r2_conditional)`.
 </small>
@@ -1924,7 +1924,7 @@ results are consistent with those obtained from the linear mixed model.
 
 - Independence of observations: Random Intercept (1 \| child_id) to
   account for repeated measures within children. ✓
-- Proportional odds ✓
+- Proportional odds (✓; for feedback condition yes) 
 - No perfect separation ✓
 - No Multicollinearity ✓ 
 - *Conclusion:* Data meets assumptions for analysis
@@ -2679,13 +2679,15 @@ check_lmm_assumptions(model_h3, model_label = "Children (H3)")
 
 ## Robustness Check RQ1: Ordinal Model
 ```{r robust-RQ1-assumptions}
-# Check for proportional odds assumption using the same fixed-effects structure as clmm_model
+# Check for proportional odds assumption using the same fixed-effects structure as clmm_model without the random effect.
 po_test <- clm(
   plan_quality ~ feedback_condition * time_point,
   data = ordinal_data
 )
 po_test_result <- Anova(po_test, type = "III")
 print(po_test_result)
+
+nominal_test(po_test)
 
 # Check for empty cells in the feedback_condition x time_point design against plan_quality, to
 # ensure sufficient observations per cell for reliable estimation. Mirrors clmm_model's fixed effects.
