@@ -581,28 +581,49 @@ extract_effect_sizes <- function(model) {
 ```
 
 ```{r helper-function-mediation-table, include=FALSE}
-# Helper function to extract mediation effects from lavaan SEM output and formats them into a publication-ready table
-extract_mediation_table <- function(fit_object, descriptions,
-                                     labels = c("a", "b", "IDE", "DE", "TE")) {
-  boot_estimates <- parameterEstimates(fit_object)
-  std_estimates  <- standardizedSolution(fit_object)
+# Block-(Cluster-)Bootstrap for SEM mediation models, resampling entire children (clusters) with replacement to preserve within-child correlation structure. Returns a matrix of bootstrap estimates for the specified parameter labels.
+boot_med <- function(model, data, labels, id = "child_id", R = 5000) {
+  kids <- unique(data[[id]])
+  out  <- matrix(NA_real_, R, length(labels), dimnames = list(NULL, labels))
+  for (r in seq_len(R)) {
+    # draw children with replacement
+    samp <- sample(kids, replace = TRUE)                
+    d <- do.call(rbind, lapply(seq_along(samp), function(i) {
+      di <- data[data[[id]] == samp[i], , drop = FALSE]
+      di[[id]] <- i                                      
+      di
+    }))
+    fit <- try(lavaan::sem(model, data = d), silent = TRUE)   
+    if (inherits(fit, "try-error")) next
+    pe <- lavaan::parameterEstimates(fit)
+    out[r, ] <- pe$est[match(labels, pe$label)]
+  }
+  out[stats::complete.cases(out), , drop = FALSE]
+}
 
-  tibble(`Model Pathway & Effect` = descriptions, lbl = labels) |>
-    rowwise() |>
-    mutate(
-      match_row = list(boot_estimates |> filter(label == .env$lbl)),
-      match_std = list(std_estimates  |> filter(label == .env$lbl)),
-      est  = match_row$est[1], beta = match_std$est.std[1],
-      z    = match_row$z[1],   p    = match_row$pvalue[1],
-      ll   = match_row$ci.lower[1], ul = match_row$ci.upper[1]
-    ) |>
-    ungroup() |>
-    transmute(
-      `Model Pathway & Effect`,
-      b = fmt(est), beta = fmt(beta),
-      `95% CI` = paste0("[", fmt(ll), ", ", fmt(ul), "]"),
-      z = fmt(z), p = format_p(p)
-)
+# Bootstrap summary table for SEM mediation models, including point estimates, standardized estimates, bootstrap standard errors, confidence intervals, z-values, and two-sided p-values-
+extract_mediation_table <- function(fit_point, boot_mat, descriptions,
+                                    labels = c("a", "b", "IDE", "DE", "TE")) {
+  pe  <- parameterEstimates(fit_point)
+  std <- standardizedSolution(fit_point)
+
+  est  <- pe$est[match(labels, pe$label)]                
+  beta <- std$est.std[match(labels, std$label)]         
+  bm   <- boot_mat[, labels, drop = FALSE]
+  se_b <- apply(bm, 2, sd)                              
+  ll   <- apply(bm, 2, quantile, 0.025)                  
+  ul   <- apply(bm, 2, quantile, 0.975)
+  z    <- est / se_b
+  p <- vapply(labels, function(l) {
+    x <- boot_mat[, l]; 2 * min(mean(x <= 0), mean(x >= 0))
+  }, numeric(1))
+
+  tibble(
+    `Model Pathway & Effect` = descriptions,
+    b = fmt(est), beta = fmt(beta),
+    `95% CI` = paste0("[", fmt(ll), ", ", fmt(ul), "]"),
+    z = fmt(z), p = format_p(p)
+  )
 }
 
 render_mediation_kbl <- function(table_data, caption) {
@@ -1357,8 +1378,10 @@ response distributions and boxplots indicate medians and interquartile ranges. <
 **Scale Reliability**
 
 ```{r receptivity-scale-reliability, include=FALSE}
-# Prepare data for internal consistency analysis by selecting the four receptivity items, including the reverse-coded fourth item. This allows for the calculation of Cronbach's alpha to assess the reliability of the feedback receptivity scale.
-receptivity_items <- merged_data[, c("recep_q1", "recep_q2", "recep_q3", "recep_q4_r")]
+# Prepare data for internal consistency analysis by selecting the four receptivity items, including the reverse-coded fourth item. This allows for the calculation of Cronbach's alpha to assess the reliability of the feedback receptivity scale. 
+receptivity_items <- merged_data |>
+  dplyr::distinct(child_id, .keep_all = TRUE) |>
+  dplyr::select(recep_q1, recep_q2, recep_q3, recep_q4_r)
 
 # Calculate Cronbach's alpha for the feedback receptivity scale using the psych package, which provides a measure of internal consistency reliability for the four items.
 reliability_receptivity <- psych::alpha(receptivity_items)
@@ -1616,6 +1639,9 @@ model_h1 <- lmerTest::lmer(
 )
 ```
 
+
+
+
 **ICC and effect sizes for final model**
 
 ```{r RQ1-effect-sizes}
@@ -1721,39 +1747,45 @@ mediation_model <- '
 ```
 
 ```{r RQ2-H2-1-bootstrap, include=FALSE, cache=TRUE, dependson = c("data-preparation", "RQ2-H2-1-model")}
-# Cluster correction for child_id and Bootstrap to handle the non-normal distribution of error terms
-set.seed(42) #fixed to ensure reproducible Bootstrap resampling results
-fit_h21 <- sem(model = mediation_model, 
-           data = merged_data, 
-           cluster = "child_id",
-           se = "bootstrap",    
-           bootstrap = N_bootstrap)    
+# Fit the mediation model using the lavaan package, specifying the model structure defined above. The fit object will be used for further analysis and interpretation of the mediation effects.
+fit_h21 <- sem(mediation_model, data = merged_data)
 
-summary(fit_h21, standardized = TRUE, ci = TRUE)
+# Nesting the bootstrapping procedure within a set.seed() function ensures that the results are reproducible. The boot_med function is used to perform bootstrapping on the mediation model, generating a specified number of bootstrap samples (N_bootstrap) to estimate the indirect, direct, and total effects, along with their confidence intervals.
+set.seed(42) 
+boot_h21 <- boot_med(
+  mediation_model, merged_data,
+  labels = c("a", "b", "IDE", "DE", "TE"),
+  R = N_bootstrap
+)
 
-# Explained variance (R²) of the mediator and outcome equations for H2.1 
+# Calculate the R-squared values for the mediator and outcome variables in the mediation model using the lavInspect function from the lavaan package. The R-squared values indicate the proportion of variance explained by the predictors in each equation of the mediation model.
 r2_h21 <- lavInspect(fit_h21, "rsquare")
 r2_h21
 ```
 
 
 ```{r H2-1-visualization}
-# Create a summary table of the mediation analysis results for H2.1, including estimates, standard errors, z-values, p-values, and confidence intervals for each path in the mediation model. The table is formatted for publication using the gt package.
-table_h2_1 <- extract_mediation_table(fit_h21, 
-descriptions = c(
-  "Path a (Condition -> Helpfulness)",
-  "Path b (Helpfulness -> Revised Quality)",
-  "Indirect Effect (IDE)", "Direct Effect (DE / Path c')", "Total Effect (TE)"
-))
+table_h2_1 <- extract_mediation_table(
+  fit_point    = fit_h21,
+  boot_mat     = boot_h21,
+  descriptions = c(
+    "Path a (Condition -> Helpfulness)",
+    "Path b (Helpfulness -> Revised Quality)",
+    "Indirect Effect (IDE)", "Direct Effect (DE / Path c')", "Total Effect (TE)"
+  )
+)
 render_mediation_kbl(table_h2_1, caption = "Perceived Helpfulness as Mediator between Feedback Condition and Revised Plan Quality (H2.1)")
 ```
 
-<small> *Note.* Instructive feedback serves as the reference category for
-feedback condition. Perceived helpfulness serves as mediator and was
-centered as well as the covariates. <i>b</i> = unstandardized estimate;
-<i>𝛽</i> = standardized estimate. 95% CI bounds correspond to
-unstandardized effects (calculated via cluster bootstrap at the child
-level). <i>R²</i><sub>mediator</sub> = `r fmt_bounded(r2_h21["perct_help_c"])`,
+<small> *Note.* <i>N</i> = `r n_children_after` children (`r n_trials_after` trials).
+Instructive feedback serves as the reference category for feedback condition. Perceived helpfulness (the mediator)
+and both initial-plan-quality covariates were entered person-mean/grand-mean centered.
+<i>b</i> = unstandardized estimate; <i>𝛽</i> = standardized estimate;
+IDE (<i>a</i> × <i>b</i>); TE = total effect (DE + IDE). 95% CIs are percentile intervals from a cluster
+(block) bootstrap that resamples children rather than individual trials
+(<i>R</i> = `r N_bootstrap`), thereby respecting the nested structure of the repeated-measures
+design; <i>z</i> and <i>p</i> are based on the bootstrap standard error.
+<i>R²</i><sub>mediator</sub> = `r fmt_bounded(r2_h21["perct_help_c"])`,
 <i>R²</i><sub>outcome</sub> = `r fmt_bounded(r2_h21["revised_pq"])`. </small>
 
 
@@ -1792,37 +1824,42 @@ mediation_model_h2 <- '
 ```
 
 ```{r RQ2-H2-2-bootstrap, include=FALSE, cache=TRUE, dependson = c("data-preparation", "RQ2-H2-2-model")}
-# Cluster correction for child_id and Bootstrap to handle the non-normal distribution of error terms
+fit_h22 <- sem(mediation_model_h2, data = merged_data)
+
 set.seed(42)
-fit_h22 <- sem(model = mediation_model_h2, 
-           data = merged_data, 
-           cluster = "child_id",
-           se = "bootstrap",    
-           bootstrap = N_bootstrap)    
+boot_h22 <- boot_med(
+  mediation_model_h2, merged_data,
+  labels = c("a", "b", "IDE", "DE", "TE"),
+  R = N_bootstrap
+)
 
-summary(fit_h22, standardized = TRUE, ci = TRUE)
-
-# Explained variance (R²) of the mediator and outcome equations for H2.2
 r2_h22 <- lavInspect(fit_h22, "rsquare")
 r2_h22
 ```
 
 
 ```{r H2-2-visualization}
-# Create a summary table of the mediation analysis results for H2.2, including estimates, standard errors, z-values, p-values, and confidence intervals for each path in the mediation model. The table is formatted for publication using the gt package.
-table_h2_2 <- extract_mediation_table(fit_h22, descriptions = c(
-  "Path a (Condition -> Motivation)",
-  "Path b (Motivation -> Revised Quality)",
-  "Indirect Effect (IDE)", "Direct Effect (DE / Path c')", "Total Effect (TE)"
-))
+table_h2_2 <- extract_mediation_table(
+  fit_point    = fit_h22,
+  boot_mat     = boot_h22,
+  descriptions = c(
+    "Path a (Condition -> Motivation)",
+    "Path b (Motivation -> Revised Quality)",
+    "Indirect Effect (IDE)", "Direct Effect (DE / Path c')", "Total Effect (TE)"
+  )
+)
 render_mediation_kbl(table_h2_2, caption = "Perceived Motivation as Mediator between Feedback Condition and Revised Plan Quality (H2.2)")
 ```
-<small> *Note.* Instructive feedback serves as the reference category for
-feedback condition. Perceived motivation serves as Mediator and was
-centered as well as the covariates. <i>b</i> = unstandardized estimate;
-<i>𝛽</i> = standardized estimate. 95% CI bounds correspond to
-unstandardized effects (calculated via cluster bootstrap at the child
-level). <i>R²</i><sub>mediator</sub> = `r fmt_bounded(r2_h22["perct_moti_c"])`,
+<small> *Note.* <i>N</i> = `r n_children_after` children (`r n_trials_after` trials).
+Instructive feedback serves as the reference category for feedback condition. Perceived motivation (the mediator)
+and both initial-plan-quality covariates were entered person-mean/grand-mean centered.
+<i>b</i> = unstandardized estimate; <i>𝛽</i> = standardized estimate;
+IDE (<i>a</i> × <i>b</i>); TE = total effect (DE + IDE). 
+95% CIs are percentile intervals from a cluster
+(block) bootstrap that resamples children rather than individual trials
+(<i>R</i> = `r N_bootstrap`), thereby respecting the nested structure of the repeated-measures
+design; <i>z</i> and <i>p</i> are based on the bootstrap standard error.
+<i>R²</i><sub>mediator</sub> = `r fmt_bounded(r2_h22["perct_moti_c"])`,
 <i>R²</i><sub>outcome</sub> = `r fmt_bounded(r2_h22["revised_pq"])`. </small>
 
 
@@ -2129,11 +2166,12 @@ anova_initial <- aov_ez(id = "child_id",
 summary(anova_initial)
 
 # Mauchly's test for sphericity, and the Greenhouse-Geisser/Huynh-Feldt epsilon and corrected p-values.
+# Tukey's HSD post-hoc tests for pairwise comparisons between trial IDs, adjusted for multiple comparisons using Tukey's method. 
 summary(anova_initial)$sphericity.tests
 summary(anova_initial)$pval.adjustments
 gg_eps_initial <- summary(anova_initial)$pval.adjustments[1, "GG eps"]
 
-pairs(emmeans(anova_initial, "trial_id"), adjust = "bonferroni")
+pairs(emmeans(anova_initial, "trial_id"), adjust = "tukey")
 
 # Perform repeated measures ANOVA for revised_pq across trials using the aov_ez function from the afex package. This analysis will assess whether there are significant differences in plan quality based on trial ID, while accounting for the repeated measures design with child_id as the subject identifier.
 anova_revised <- aov_ez(id = "child_id",
@@ -2147,7 +2185,7 @@ summary(anova_revised)$sphericity.tests
 summary(anova_revised)$pval.adjustments
 gg_eps_revised <- summary(anova_revised)$pval.adjustments[1, "GG eps"]
 
-pairs(emmeans(anova_revised, "trial_id"), adjust = "bonferroni")
+pairs(emmeans(anova_revised, "trial_id"), adjust = "tukey")
 ```
 
 ```{r trial-anova-initial-table}
@@ -2242,6 +2280,7 @@ ggplot(summary_data_scenario, aes(x = scen_name, y = mean_pq, color = time, grou
 
 ```{r scenario-rmAnova, include=FALSE}
 # Perform repeated measures ANOVA for initial_pq across scenarios using the aov_ez function from the afex package. This analysis will assess whether there are significant differences in plan quality based on scenario id, while accounting for the repeated measures design with child_id as the subject identifier.
+# Tukey's HSD post-hoc tests for pairwise comparisons between trial IDs, adjusted for multiple comparisons using Tukey's method. 
 anova_initial_scenario <- aov_ez(id = "child_id",
                                   dv = "initial_pq",
                                   within = "scen_id",
@@ -2253,7 +2292,7 @@ summary(anova_initial_scenario)$sphericity.tests
 summary(anova_initial_scenario)$pval.adjustments
 gg_eps_initial_scenario <- summary(anova_initial_scenario)$pval.adjustments[1, "GG eps"]
 
-pairs(emmeans(anova_initial_scenario, "scen_id"), adjust = "bonferroni")
+pairs(emmeans(anova_initial_scenario, "scen_id"), adjust = "tukey")
 
 
 # Perform repeated measures ANOVA for revised_pq across scenarios using the aov_ez function from the afex package. This analysis will assess whether there are significant differences in plan quality based on scenario id, while accounting for the repeated measures design with child_id as the subject identifier.
@@ -2266,7 +2305,7 @@ summary(anova_revised_scenario)$sphericity.tests
 summary(anova_revised_scenario)$pval.adjustments
 gg_eps_revised_scenario <- summary(anova_revised_scenario)$pval.adjustments[1, "GG eps"]
 
-pairs(emmeans(anova_revised_scenario, "scen_id"), adjust = "bonferroni")
+pairs(emmeans(anova_revised_scenario, "scen_id"), adjust = "tukey")
 ```
 
 
@@ -2423,8 +2462,12 @@ ggplot(summary_data_gender, aes(x = time, y = mean_pq, color = gender, group = g
 ```{r robustness-check-RQ3-dropping-item-4, include=FALSE}
 # Reliability analysis of the 4-item receptivity scale 
 
-# Confirm improved reliability without Item 4
-psych::alpha(merged_data[, c("recep_q1", "recep_q2", "recep_q3")])
+# Confirm improved reliability without Item 4 
+psych::alpha(
+  merged_data |>
+    dplyr::distinct(child_id, .keep_all = TRUE) |>
+    dplyr::select(recep_q1, recep_q2, recep_q3)
+)
 
 # Re-fit H3 with the 3-item receptivity score to assess robustness of the moderation effect
 model_h3_robust <- lmerTest::lmer(
