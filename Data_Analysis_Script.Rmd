@@ -72,7 +72,7 @@ Hypotheses Testing
 
 Additional Analyses
 
-- Table \@ref(tab:robust-RQ1-visualization): Cumulative Link Mixed Model of Plan Quality as a Function of Feedback Condition and Time Point (Robustness Check for H1)
+- Table \@ref(tab:robust-RQ1-visualization): "Cumulative Link Mixed Model of Revised Plan Quality by Feedback Condition, Controlling for Initial Plan Quality (Robustness Check for H1)"
 - Table \@ref(tab:trial-anova-initial-table): Repeated Measures Anova for Initial Plan Quality across Trials
 - Table \@ref(tab:trial-anova-revised-table): Repeated Measures Anova for Revised Plan Quality across Trials
 - Table \@ref(tab:scenario-anova-initial-table): Repeated Measures Anova for Initial Plan Quality across Scenarios
@@ -1720,6 +1720,7 @@ table_h1 <- extract_lmm_table(model_h1,c(
   "initial_pq_mean_child" = "Initial PQ (Child-Level)"
 ))
 render_lmm_gt(table_h1, caption = "Linear Mixed Model Predicting Revised Plan Quality from Feedback Condition (H1)")
+
 ```
 <small> *Note.* <i>N</i> = `r n_children_after` children, total observations =
 `r n_trials_after` trials. Instructive feedback serves as the reference
@@ -1775,12 +1776,16 @@ will predict a higher plan quality after revision.
 - Non-Linearity of Path Relations detected
 - Non-normality of residuals detected
 - Heteroscedasticity detected
-- No Omitted Confounders ✓ (Theoretically assumed)
-- *Conclusion:* Data does not meet all assumptions for analysis (full diagnostic output and test statistics reported in the
-  Appendix).
-  Deviations could reflect the bounded categorical nature of the scores,
-  which is why a Bootstrapping was performed
-
+- No multicollinearity ✓ 
+- No unmeasured treatment confounding (feedback condition randomised within
+  child; initial plan quality adjusted for)
+- Independence (addressed by the cluster bootstrap resampling children)
+- *Conclusion:* The distributional assumptions (linearity, normality, homoscedasticity) are not met, as expected for bounded, discrete plan-quality scores.
+  Inference therefore relied on a nonparametric cluster bootstrap, which does not
+  assume normality or homoscedasticity. The assumptions that remain relevant,
+  absence of multicollinearity, confounding controlled by design, and independence
+  via cluster resampling, are satisfied.
+  
 ✓ = assumption met
 
 **Model specification**
@@ -1848,18 +1853,21 @@ design; <i>z</i> and <i>p</i> are based on the bootstrap standard error.
 
 
 **RQ2, H2.2 Results of Assumption Testing**
-
+  
 - Non-Linearity of Path Relations detected
-
 - Non-normality of residuals detected
-
 - Heteroscedasticity detected
-
-- No Omitted Confounders ✓ (Theoretically assumed)
-
-- *Conclusion:* Data does not meet all assumptions for analysis.
-  Deviations could reflect the bounded categorical nature of the scores,
-  which is why a Bootstrapping will be performed
+- No multicollinearity ✓ 
+- No unmeasured treatment confounding (feedback condition randomised within
+  child; initial plan quality adjusted for)
+- Independence (addressed by the cluster bootstrap resampling children)
+- *Conclusion:* The distributional assumptions (linearity, normality, homoscedasticity) are not met, as expected for bounded, discrete plan-quality scores.
+  Inference therefore relied on a nonparametric cluster bootstrap, which does not
+  assume normality or homoscedasticity. The assumptions that remain relevant,
+  absence of multicollinearity, confounding controlled by design, and independence
+  via cluster resampling, are satisfied.
+  
+✓ = assumption met
 
 **Model specification**
 
@@ -2006,60 +2014,48 @@ R²m =`r fmt_bounded(effect_sizes_h3$r2_marginal)`, R²c =
 
 ## Robustness Check RQ1: Ordinal Multilevel Logistic Regression
 
-**Planned Analysis:** Given the non-normal distribution of the plan
-quality scores and the presence of floor and ceiling effects, an ordinal
-multilevel logistic regression model will be fitted as a robustness
-check. The dependent variable will be the revised plan quality score
-(0-5), treated as an ordinal outcome. The model will include feedback
-condition, initial plan quality, and their interaction as fixed effects,
-with a random intercept for child to account for the repeated
-measures design. The significance of the fixed effects will be examined to determine if the results are consistent with those obtained from the linear mixed model.
+**Planned Analysis:** Given the non-normal distribution of the plan-quality scores and the presence of floor and ceiling effects, an ordinal cumulative link mixed model was fitted as a robustness check for H1. Revised plan quality (0–5) was treated as an ordered outcome and modelled as a function of feedback condition, controlling for initial plan quality decomposed into its within-child and between-child components, with a random intercept for child. This mirrors the estimand of the primary linear mixed model on an ordinal scale, so that any divergence would indicate sensitivity of the H1 result to the metric (interval-scale) assumption.
 As a robustness check intended to relax the distributional assumptions of the linear mixed model rather than to replicate its random-effects structure, the cumulative link mixed model was specified with a by-child random intercept only. For an ordinal outcome of this type (six categories with pronounced floor and ceiling effects), a random-slope structure is rarely estimable and is not required for the check's purpose of confirming that the H1 effect is robust to the metric assumption.
 
 **CLMM Results of Assumption Testing**
 
-- Independence of observations: Random Intercept (1 \| child_id) to
-  account for repeated measures within children. ✓
-- Proportional odds (✓; for feedback condition yes) 
+- Independence of observations: random intercept (1 | child_id) accounts for
+  repeated measures within children ✓
+- Monotonic thresholds ✓
+- Proportional odds: met for feedback condition and for between-child initial plan quality ✓; violated for
+  within-child initial plan quality
 - No perfect separation ✓
-- No Multicollinearity ✓ 
-- *Conclusion:* Data meets assumptions for analysis
+- No multicollinearity ✓ 
+- *Conclusion:* Assumptions are satisfied for the focal predictor
+  (feedback condition). The proportional-odds violation is confined to a control
+  covariate and, given the near-orthogonality of the predictors,
+  does not affect the robustness inference for feedback condition.
 
 ```{r data-preparation-robust-RQ1, include=FALSE}
-# Prepare data for ordinal multilevel logistic regression by selecting relevant columns, reshaping the data to long format, and converting variables to appropriate types (factor and ordered). This prepares the dataset for fitting a cumulative link mixed model (CLMM) to analyze the effects of feedback condition and time point on plan quality.
-ordinal_data <- merged_data |> 
-  select(child_id, trial_id, feedback_condition, initial_pq, revised_pq) |> 
-  pivot_longer(
-    cols = c(initial_pq, revised_pq),
-    names_to = "time_point",
-    values_to = "plan_quality"
-  ) |> 
+# Prepare the data for the cumulative link mixed model (CLMM) analysis by converting the feedback condition to a factor with appropriate levels and labels, and ensuring that the revised plan quality is treated as an ordered factor. This step is necessary for fitting the ordinal logistic regression model.
+ordinal_data <- merged_data |>
   mutate(
-    time_point = factor(
-      ifelse(time_point == "initial_pq", "Pre-Feedback", "Post-Feedback"),
-      levels = c("Pre-Feedback", "Post-Feedback")
-    ),
     feedback_condition = factor(
       feedback_condition,
       levels = c("instructive", "dialogic"),
       labels = c("instructive Feedback", "dialogic Feedback")
     ),
-    plan_quality = ordered(plan_quality)
+    plan_quality = ordered(revised_pq)
   )
 ```
 
-Fit a cumulative link mixed model (CLMM) to analyze the effects of feedback condition and time point on plan quality, with random intercepts for child to account for repeated measures. The model uses a logit link function to estimate the odds of higher plan quality scores based on the fixed effects of feedback condition and time point.
+Fit a cumulative link mixed model (CLMM) to analyze the relationship between feedback condition and plan quality, controlling for initial plan quality and including a random intercept for child to account for the nested structure of the data. 
 
 ```{r robust-RQ1-analysis, results='hide', echo=TRUE}
 clmm_model <- clmm(
-  plan_quality ~ feedback_condition * time_point + (1 | child_id),
+  plan_quality ~ feedback_condition + initial_pq_c + initial_pq_mean_child + (1 | child_id),
   data = ordinal_data,
   link = "logit"
 )
 ```
 
 
-```{r robust-RQ1-visualization, tab.cap="Cumulative Link Mixed Model of Plan Quality as a Function of Feedback Condition and Time Point (Robustness Check for H1)"}
+```{r robust-RQ1-visualization, tab.cap="Cumulative Link Mixed Model of Revised Plan Quality by Feedback Condition, Controlling for Initial Plan Quality (Robustness Check for H1)", message=FALSE"}
 # Render the results of the cumulative link mixed model (CLMM) for plan quality in a publication-ready table format using the gt package. The table includes estimates, odds ratios, confidence intervals, and p-values for each predictor in the model, with appropriate labels and formatting for clarity.
 extract_clmm_table <- function(model) {
   coefs  <- summary(model)$coefficients
@@ -2090,11 +2086,11 @@ clmm_term_labels <- c(
   "3|4" = "3|4",
   "4|5" = "4|5",
   "feedback_conditiondialogic Feedback" = "Feedback Condition (Dialogic)",
-  "time_pointPost-Feedback" = "Time (Post-Feedback)",
-  "feedback_conditiondialogic Feedback:time_pointPost-Feedback" = "Feedback Condition × Time"
+  "initial_pq_c" = "Initial PQ (Trial-Level)",
+  "initial_pq_mean_child" = "Initial PQ (Child-Level)"
 )
 
-table_clmm <- extract_clmm_table(clmm_model) |>
+table_clmm <- extract_clmm_table(clmm_ancova) |>
   dplyr::mutate(Effect = dplyr::coalesce(unname(clmm_term_labels[Variable]), Variable)) |>
   dplyr::select(Effect, Estimate, CI, Group)
 
@@ -2116,8 +2112,8 @@ extract_tau00_clmm <- function(model) {
 }
 
 sigma2_logit <- pi^2 / 3
-tau00        <- extract_tau00_clmm(clmm_model)
-r2_clmm      <- tryCatch(performance::r2_nakagawa(clmm_model), error = function(e) NULL)
+tau00        <- extract_tau00_clmm(clmm_ancova)
+r2_clmm      <- tryCatch(performance::r2_nakagawa(clmm_ancova), error = function(e) NULL)
 
 random_part <- tibble(
   Effect = c("σ²", "τ₀₀ (child_id)"),
@@ -2146,7 +2142,7 @@ table_clmm_full <- dplyr::bind_rows(table_clmm, random_part) |>
 
 table_clmm_full |>
   gt(rowname_col = "Effect", groupname_col = "Group") |>
-  tab_caption(caption = "Cumulative Link Mixed Model of Plan Quality as a Function of Feedback Condition and Time Point (Robustness Check for H1)") |>
+  tab_caption(caption = "Cumulative Link Mixed Model of Revised Plan Quality by Feedback Condition, Controlling for Initial Plan Quality (Robustness Check for H1)") |>
   tab_spanner(label = "Plan Quality", columns = c(Estimate, CI)) |>
   cols_label(Estimate = md("*Odds Ratio*"), CI = md("*95% CI*")) |>
   text_transform(
@@ -2169,7 +2165,8 @@ table_clmm_full |>
     stub.border.style = "none"
   )
 ```
-<small> *Note.* Reference category for feedback condition is instructive feedback. Time point is coded as pre-feedback and post-feedback. Odds ratios are reported with 95% confidence intervals. ICC = intraclass correlation coefficient; R² = variance explained by fixed effects (marginal) and by fixed + random effects (conditional). </small>
+<small> *Note.* Reference category for feedback condition is instructive feedback. Initial plan quality was decomposed into within-child (trial-level) and between-child (child-level) components. Odds ratios above 1 indicate higher odds of a higher plan-quality category. ICC = intraclass correlation; R² = marginal (fixed) / conditional (fixed + random). </small>
+
 
 ## Distribution of Plan Quality across Trials
 
@@ -2788,7 +2785,7 @@ check_lmm_assumptions(model_h3, model_label = "Children (H3)")
 ```{r robust-RQ1-assumptions}
 # Check for proportional odds assumption using the same fixed-effects structure as clmm_model without the random effect.
 po_test <- clm(
-  plan_quality ~ feedback_condition * time_point,
+  plan_quality ~ feedback_condition + initial_pq_c + initial_pq_mean_child,
   data = ordinal_data
 )
 po_test_result <- Anova(po_test, type = "III")
@@ -2798,22 +2795,19 @@ nominal_test(po_test)
 
 # Check for empty cells in the feedback_condition x time_point design against plan_quality, to
 # ensure sufficient observations per cell for reliable estimation. Mirrors clmm_model's fixed effects.
-contingency_table <- table(
-  interaction(ordinal_data$feedback_condition, ordinal_data$time_point),
-  ordinal_data$plan_quality
-)
+contingency_table <- table(ordinal_data$feedback_condition, ordinal_data$plan_quality)
 empty_cells <- sum(contingency_table == 0)
 total_cells <- length(contingency_table)
-
-print("Cross-tabulation for RQ1 Groups (Feedback Condition x Time Point):")
+print("Cross-tabulation (Feedback Condition x Revised Plan Quality):")
 print(contingency_table)
 
 # Check for multicollinearity in the fixed effects of clmm_model (VIF only depends on the predictor
 # matrix, so the linear proxy model just needs matching predictors). VIF > 5 indicates a concern.
-vif_data_clmm <- ordinal_data |> 
-  dplyr::select(plan_quality, feedback_condition, time_point) |> 
+vif_data_clmm <- ordinal_data |>
+  dplyr::select(plan_quality, feedback_condition, initial_pq_c, initial_pq_mean_child) |>
   na.omit()
-vif_model_clmm <- lm(as.numeric(plan_quality) ~ feedback_condition * time_point, data = vif_data_clmm)
+vif_model_clmm <- lm(as.numeric(plan_quality) ~ feedback_condition + initial_pq_c + initial_pq_mean_child,
+                     data = vif_data_clmm)
 vif(vif_model_clmm)
 ```
 
