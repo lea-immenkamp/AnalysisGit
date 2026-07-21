@@ -63,6 +63,7 @@ Hypotheses Testing
 
 - Table \@ref(tab:RQ1-anova-trial-output): Model Comparison of trial random effect with Likelihood Ratio Test
 - Table \@ref(tab:RQ1-anova-initial-pq-output): Model Comparison of initial plan quality with Likelihood Ratio Test
+- Table \@ref(tab:RQ1-anova-slope-output): Model Comparison of slope random effect with Likelihood Ratio Test
 - Table \@ref(tab:RQ1-visualization-table): Linear Mixed Model Predicting Revised Plan Quality from Feedback Condition (H1)
 - Table \@ref(tab:H2-1-visualization): Perceived Helpfulness as Mediator between Feedback Condition and Revised Plan Quality (H2.1)
 - Table \@ref(tab:H2-2-visualization): Perceived Motivation as Mediator between Feedback Condition and Revised Plan Quality (H2.2)
@@ -470,7 +471,7 @@ merged_data <- merged_data |>
 # Helper function to extract fixed and random effects from a linear mixed model (lmer) and format them into a publication-ready table. The function takes the fitted model object and a named vector of term labels for more descriptive variable names.
 extract_lmm_table <- function(model, term_labels) {
   coefs  <- summary(model)$coefficients
-  ci_all <- confint(model, method = "profile")
+ ci_all <- confint(model, method = "profile", parm = "beta_")
 
   coef_tab <- tibble(
     Variable = rownames(coefs),
@@ -495,16 +496,21 @@ extract_lmm_table <- function(model, term_labels) {
     )
 
   re <- as.data.frame(VarCorr(model))
-  re$grp <- ifelse(re$grp == "child_id", "τ₀₀ (Intercept)", "σ² (Residual)")
-
-  child_sd_ci    <- ci_tab[ci_tab$Variable == ".sig01", ]
-  residual_sd_ci <- ci_tab[ci_tab$Variable == ".sigma", ]
+  re_effect <- mapply(function(grp, v1, v2) {
+    if (grp == "Residual") return("σ² (Residual)")
+    if (is.na(v2)) {
+      if (v1 == "(Intercept)") "τ₀₀ (Intercept)" else "τ₁₁ (Slope)"
+    } else {
+      "ρ₀₁ (Intercept, Slope)"
+    }
+  }, re$grp, re$var1, re$var2, USE.NAMES = FALSE)
 
   random_part <- tibble(
-    Effect = re$grp, Estimate = fmt(re$vcov), SE = fmt(re$sdcor),
-    LL = fmt(c(child_sd_ci$CI_low^2, residual_sd_ci$CI_low^2)),
-    UL = fmt(c(child_sd_ci$CI_high^2, residual_sd_ci$CI_high^2)),
-    t = "", p = "", Group = "Random Effects"
+    Effect   = re_effect,
+    Estimate = fmt(re$vcov),  
+    SE       = fmt(re$sdcor),  
+    LL = "", UL = "", t = "", p = "",
+    Group = "Random Effects"
   )
 
   random_header <- tibble(
@@ -540,6 +546,7 @@ render_lmm_gt <- function(table_data, caption, estimate_label = "b") {
       stub.border.style = "none"
     )
 }
+
 ```
 
 
@@ -1631,16 +1638,64 @@ if ((initial_pq_anova)$`Pr(>Chisq)`[2] > 0.05) {
 ```
 
 
-```{r RQ1-model}
-# Fit the final linear mixed-effects model for H1, using the decomposed initial plan quality as covariates and including a random intercept for child. This model will be used for further analysis and interpretation of the effects of feedback condition on revised plan quality.
-model_h1 <- lmerTest::lmer(
-  revised_pq ~ feedback_condition + initial_pq_c + initial_pq_mean_child + (1 | child_id),
+A model that includes random slopes for feedback condition was also fitted to account for potential variability in the effect of feedback condition across children. This model will be compared with the model that includes only random intercepts to determine if the inclusion of random slopes significantly improves model fit.
+
+```{r RQ1-model-comparison-slope, results='hide', echo=TRUE}
+# Fit a linear mixed-effects model that includes random slopes for feedback condition to account for potential variability
+model_h1_slope <- lmerTest::lmer(
+  revised_pq ~ feedback_condition + initial_pq_c + initial_pq_mean_child +
+    (1 + feedback_condition | child_id),
   data = merged_data
 )
 ```
 
 
+```{r RQ1-anova-slope, include=FALSE}
+# Compare the model with random slopes for feedback condition to the model without random slopes to determine if the inclusion of random slopes significantly improves model fit.
+slope_anova <- anova(model_h1_decomp, model_h1_slope)
 
+# Create a data frame to summarize the model comparison results, including AIC, BIC, Chi-squared statistic, and p-value for the likelihood ratio test.
+comparison_slope <- data.frame(
+  Model = c("Decomposed initial plan quality", "Random slopes for feedback condition"),
+  AIC = fmt(slope_anova$AIC),
+  BIC = fmt(slope_anova$BIC),
+  "Chisq" = c("", fmt(slope_anova$Chisq[2])),
+  "p-value" = c("", format_p(slope_anova$`Pr(>Chisq)`[2]))
+)
+
+```
+
+
+```{r RQ1-anova-slope-output}
+# Render the model comparison results in a publication-ready table format using kableExtra, with appropriate alignment, caption, and column specifications. The table presents AIC, BIC, Chi-squared statistic, and p-value for the likelihood ratio test comparing models with and without random slopes for feedback condition.
+kableExtra::kbl(
+  comparison_slope,
+  caption = "Model Comparison of random slopes for feedback condition with Likelihood Ratio Test"
+) |> 
+  kable_classic(
+    full_width = FALSE, 
+    html_font = "Times New Roman"
+  ) |> 
+  column_spec(1:5, extra_css = "padding: 10px;") |> 
+  row_spec(0, extra_css = "text-align: center;")
+
+# Decision on model selection based on p-value from likelihood ratio test
+if ((slope_anova)$`Pr(>Chisq)`[2] > 0.05) {
+  print("The model without random slopes for feedback condition is sufficient for analysis.")
+} else { 
+  print("The model with random slopes for feedback condition provides a significantly better fit and will be used for further analysis.")
+} 
+```
+
+
+```{r RQ1-model}
+# Fit the final linear mixed-effects model for H1, using the decomposed initial plan quality as covariates and including a random intercept for child. This model will be used for further analysis and interpretation of the effects of feedback condition on revised plan quality.
+model_h1 <- lmerTest::lmer(
+  revised_pq ~ feedback_condition + initial_pq_c + initial_pq_mean_child +
+    (1 + feedback_condition | child_id),
+  data = merged_data
+)
+```
 
 **ICC and effect sizes for final model**
 
@@ -1669,7 +1724,9 @@ render_lmm_gt(table_h1, caption = "Linear Mixed Model Predicting Revised Plan Qu
 <small> *Note.* <i>N</i> = `r n_children_after` children, total observations =
 `r n_trials_after` trials. Instructive feedback serves as the reference
 category for feedback condition. PQ = Plan Quality. CI = confidence interval; <i>LL</i> =
-lower limit; <i>UL</i> = upper limit. ICC = `r fmt_bounded(icc_h1$ICC_adjusted)`.
+lower limit; <i>UL</i> = upper limit. 
+Random effects include a by-child random intercept and a random slope for feedback condition (τ₁₁ = slope variance; ρ₀₁ = intercept–slope correlation). 
+ICC = `r fmt_bounded(icc_h1$ICC_adjusted)`.
 R²m = `r fmt_bounded(effect_sizes_h1$r2_marginal)`,
 R²c = `r fmt_bounded(effect_sizes_h1$r2_conditional)`. </small>
 
@@ -1900,7 +1957,8 @@ children’s receptivity to the feedback.
 ```{r RQ3-model, results='hide', echo=TRUE}
 # fit linear mixed model with interaction between feedback condition and receptivity, controlling for initial plan quality and random intercept for child
 model_h3 <- lmerTest::lmer(
-  revised_pq ~ feedback_condition * receptivity_c + initial_pq_mean_child + initial_pq_c + (1 | child_id),
+  revised_pq ~ feedback_condition * receptivity_c + initial_pq_mean_child + initial_pq_c + 
+     (1 + feedback_condition | child_id),
   data = merged_data
 )
 
@@ -1936,7 +1994,9 @@ render_lmm_gt(table_h3, caption = "Linear Mixed Model Testing the Moderating Rol
 <small> *Note.* <i>N</i> = `r n_children_after` children, total observations =
 `r n_trials_after` trials. Instructive feedback serves as the reference
 category for feedback condition. PQ = Plan Quality. CI = confidence interval; <i>LL</i> =
-lower limit; <i>UL</i> = upper limit. ICC = `r fmt_bounded(icc_h3$ICC_adjusted)`.
+lower limit; <i>UL</i> = upper limit. 
+Random effects include a by-child random intercept and a random slope for feedback condition (τ₁₁ = slope variance; ρ₀₁ = intercept–slope correlation).
+ICC = `r fmt_bounded(icc_h3$ICC_adjusted)`.
 R²m =`r fmt_bounded(effect_sizes_h3$r2_marginal)`, R²c =
 + `r fmt_bounded(effect_sizes_h3$r2_conditional)`.
 </small>
@@ -1952,10 +2012,9 @@ multilevel logistic regression model will be fitted as a robustness
 check. The dependent variable will be the revised plan quality score
 (0-5), treated as an ordinal outcome. The model will include feedback
 condition, initial plan quality, and their interaction as fixed effects,
-with random intercepts for child and trial to account for the repeated
-measures design and potential variability across trials. The
-significance of the fixed effects will be examined to determine if the
-results are consistent with those obtained from the linear mixed model.
+with a random intercept for child to account for the repeated
+measures design. The significance of the fixed effects will be examined to determine if the results are consistent with those obtained from the linear mixed model.
+As a robustness check intended to relax the distributional assumptions of the linear mixed model rather than to replicate its random-effects structure, the cumulative link mixed model was specified with a by-child random intercept only. For an ordinal outcome of this type (six categories with pronounced floor and ceiling effects), a random-slope structure is rarely estimable and is not required for the check's purpose of confirming that the H1 effect is robust to the metric assumption.
 
 **CLMM Results of Assumption Testing**
 
@@ -2458,6 +2517,7 @@ ggplot(summary_data_gender, aes(x = time, y = mean_pq, color = gender, group = g
   (Cronbach's α). Item-total correlations and alpha-if-item-deleted
   statistics were inspected to identify items reducing scale
   reliability (see Distribution of Receptivity).
+  
 
 ```{r robustness-check-RQ3-dropping-item-4, include=FALSE}
 # Reliability analysis of the 4-item receptivity scale 
@@ -2471,9 +2531,12 @@ psych::alpha(
 
 # Re-fit H3 with the 3-item receptivity score to assess robustness of the moderation effect
 model_h3_robust <- lmerTest::lmer(
-  revised_pq ~ feedback_condition * receptivity_3items_c + initial_pq_c + initial_pq_mean_child + (1 | child_id),
+  revised_pq ~ feedback_condition * receptivity_3items_c + initial_pq_c + initial_pq_mean_child + 
+   (1 + feedback_condition | child_id),
   data = merged_data
 )
+
+summary(model_h3_robust)
 ```
 
 
@@ -2562,6 +2625,7 @@ render_lmm_comparison_gt(
   moderation analysis was conducted in which each receptivity item was
   entered individually (grand-mean centered) as the moderator in place
   of the composite receptivity score.
+- The random slope for feedback condition was removed to avoid convergence issues, and the random intercept for child was retained to account for repeated measures.
 - This yielded four parallel models, one per receptivity dimension
   (experiential attitudes, instrumental attitudes, cognitive engagement,
   behavioral engagement).
