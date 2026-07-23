@@ -25,8 +25,7 @@ Effects of Framing, Perception and Receptivity on Plan Quality
 Improvement". It includes all steps required to prepare, describe, and
 analyze the study data. Most code chunks are hidden in the rendered HTML output, so readers see a clean report of tables and figures rather than the underlying code. The full annotated code remains available in the source .Rmd file for transparency and reproducibility, with comments explaining the process. 
 
-The analysis focuses on understanding how different types of AI feedback (instructive vs.
-dialogic) influence children’s plan quality improvement, motivation and perceived helpfulness, while accounting for their receptivity of the feedback.
+The present study set out to examine how adaptive, LLM-generated feedback scaffolds the formulation of implementation intentions (if-then plans) in early adolescence. Specifically, it examined whether a dialogic feedback framing outperforms an instructive framing, whether these effects are mediated by perceived helpfulness and motivation, and whether individual differences in feedback receptivity moderate these outcomes.
 
 
 ```{r general-information-script, include=FALSE}
@@ -72,10 +71,11 @@ Hypotheses Testing
 
 Additional Analyses
 
-- Table \@ref(tab:robust-RQ1-visualization): "Cumulative Link Mixed Model of Revised Plan Quality by Feedback Condition, Controlling for Initial Plan Quality (Robustness Check for H1)"
+- Table \@ref(tab:robust-RQ1-visualization): Cumulative Link Mixed Model of Revised Plan Quality by Feedback Condition, Controlling for Initial Plan Quality (Robustness Check for H1)
 - Table \@ref(tab:trial-anova-initial-table): Repeated Measures ANOVA for Initial Plan Quality across Trials
 - Table \@ref(tab:trial-anova-revised-table): Repeated Measures ANOVA for Revised Plan Quality across Trials
 - Table \@ref(tab:scenario-anova-initial-table): Repeated Measures ANOVA for Initial Plan Quality across Scenarios
+- Table \@ref(tab:scenario-anova-revised-table): Repeated Measures ANOVA for Revised Plan Quality across Scenarios
 - Table \@ref(tab:mixed-anova-gender-table): Mixed ANOVA of Plan Quality by Time and Gender
 - Table \@ref(tab:robustness-check-RQ3-visualization): Model Comparison Receptivity: Original vs. Robustness Check (3-item)
 - Table \@ref(tab:exploratory-RQ3-table): Exploratory Item-Level Moderation Analysis of Receptivity
@@ -110,12 +110,20 @@ Additional Analyses
 the revised plan differ between LLM-generated dialogic and instructive
 feedback?
 
+- **H1:** Children show higher revised plan quality after dialogic feedback than after instructive feedback, controlling for their initial plan quality.
+
 **RQ2:** To what extent does the perceived helpfulness and perceived motivation of LLM generated
 feedback, mediate the relationship between feedback condition and children’s plan quality after revision, with the feedback being instructive vs. dialogic?
+
+- **H2.1:** The perceived helpfulness of the feedback mediates the relationship between LLM-generated feedback condition and the quality of children’s revised plans. Specifically, dialogic feedback will lead to a different perceived helfulness than instructive feedback, which in turn will predict a different plan quality after revision.
+
+- **H2.2:** The perceived motivation of the feedback mediates the relationship between LLM-generated feedback condition and the quality of children’s revised plans. Specifically, dialogic feedback will lead to a higher perceived motivation, than instructive feedback, which in turn will predict a higher plan quality after revision.
 
 **RQ3:** Does feedback receptivity moderate the relationship between
 LLM-generated instructive and dialogic feedback and the quality of the
 revised plan?
+
+- **H3:** Feedback receptivity moderates the relationship between LLM-generated instructive and dialogic feedback and the quality of the revised plan.
 
 # Data preparation
 
@@ -783,10 +791,10 @@ check_mediation_assumptions <- function(mediator_model, outcome_model) {
 codebook_table <- tribble(
   ~Variable, ~Label, ~Description,
   "child_id", "Child ID", "Participant ID",
-  "trial_id", "Trial ID", "Six trials (3 instructive, 3 dialogic)",
+  "trial_id", "Trial ID", "Six trials (3 receiving instructive and 3 receiving dialogic feedback in a randomized order)",
   "age", "Age", "Age of the participant",
   "gender", "Gender", "1 = Male, 2 = Female, 3 = Other",
-  "scen_id", "Scenario ID", "Six different scenarios in randomized order",
+  "scen_id", "Scenario ID", "Six different scenarios in a randomized order",
   "scen_name", "Scenario Name", "Name/content of the scenario by trial",
   "feedback_condition", "Feedback Condition", "Instructive vs. dialogic feedback",
   "in_sp", "Initial Specificity", "Dummy-coded dimension for plan specificity (whether the plan precisely specifies a situational cue or a specific activity)",
@@ -801,15 +809,15 @@ codebook_table <- tribble(
   "re_ap", "Revised Appropriateness", "Dummy-coded dimension for plan appropriateness",
   "re_tp", "Revised Temporal Precision", "Dummy-coded dimension for temporal precision",
   "revised_pq", "Revised Plan Quality", "Sum of five revised dimensions (0–5)",
-  "pq_improvement", "Plan Quality Improvement", "Difference: revised_pq - initial_pq",
-  "perct_moti", "Perceived Motivation", "Perceived motivation of feedback (1–4)",
-  "perct_help", "Perceived Helpfulness", "Perceived helpfulness of feedback (1–4)",
+  "pq_improvement", "Plan Quality Improvement", "Difference of revised_pq and initial_pq",
+  "perct_moti", "Perceived Motivation", "Perceived motivation of feedback (on a scale from 1–4)",
+  "perct_help", "Perceived Helpfulness", "Perceived helpfulness of feedback (1 to 4)",
   "recep_q1", "Receptivity Item 1", "Experiential attitudes subscale",
   "recep_q2", "Receptivity Item 2", "Instrumental attitudes subscale",
   "recep_q3", "Receptivity Item 3", "Cognitive engagement subscale",
   "recep_q4", "Receptivity Item 4", "Behavioral engagement subscale",
   "recep_q4_r", "Receptivity Item 4 (Reverse-coded)", "Reverse-coded behavioral engagement subscale",
-  "receptivity", "Receptivity (Mean)", "Mean of 4 items (1–5)"
+  "receptivity", "Receptivity (Mean)", "Mean of 4 receptivity items (on a scale from 1 to 5)"
 )
 
 knitr::kable(
@@ -848,7 +856,7 @@ n_summary <- questionnaire_clean |>
 age_summary <- questionnaire_clean |> 
   reframe(
     Characteristic = "Age (Year)",
-    Measure = c("<i>Mean</i>", "<i>SD</i>", "<i>Min</i>", "<i>Max</i>"),
+    Measure = c("<i>M</i>", "<i>SD</i>", "<i>Min</i>", "<i>Max</i>"),
     Value = as.character(c(
       fmt(mean(age, na.rm = TRUE)),
       fmt(sd(age, na.rm = TRUE)),
@@ -898,6 +906,9 @@ demographics_table |>
   )        
 
 ```
+
+<small> *Note*. Values in parentheses represent percentages (n = sub-sample count). </small>
+
 
 # Distribution
 
@@ -983,11 +994,31 @@ Frequencies are based on `r n_trials_after` observations for each dimension (`r 
 # Internal consistency of the initial/revised dimension scales (KR-20, since the five dimension items are dichotomously coded). Computed here, reported as inline text below the figure rather than as a standalone table, since only two numbers result.
 alpha_initial <- psych::alpha(initial_items)
 alpha_revised <- psych::alpha(revised_items)
+
+
+
+# Ordinal McDonald's ω 
+omega_initial <- psych::omega(
+  initial_items,
+  nfactors = 1,     
+  poly     = TRUE,  
+  plot     = FALSE
+)
+
+omega_revised <- psych::omega(
+  revised_items,
+  nfactors = 1,
+  poly     = TRUE,
+  plot     = FALSE
+)
+
+omega_initial$omega.tot
+omega_revised$omega.tot
 ```
 
 - Internal consistency was acceptable for the initial plan quality
-  scale (α = `r fmt_bounded(alpha_initial$total$raw_alpha, 2)`) but
-  below the threshold of α = .70 (Nunnally, 1978) for the revised scale (α = `r fmt_bounded(alpha_revised$total$raw_alpha, 2)`),
+  scale (α = `r fmt_bounded(alpha_initial$total$raw_alpha, 2)`; ω = `r fmt_bounded(omega_initial$omega.tot, 2)`) but
+  below the threshold of α = .70 (Nunnally, 1978) for the revised scale (α = `r fmt_bounded(alpha_revised$total$raw_alpha, 2)`; ω = `r fmt_bounded(omega_revised$omega.tot, 2)`),
   indicating comparatively lower reliability of the revised dimension items. Because the
   five items are dichotomously coded (0 = not met, 1 = met), Cronbach's alpha here is
   mathematically equivalent to the Kuder-Richardson Formula 20 (KR-20) coefficient
@@ -1042,7 +1073,7 @@ kableExtra::kbl(
 
 ```
 
-<small> *Note.* PQ= Plan Quality. Scores were calculated by summing the
+<small> *Note.* PQ = Plan Quality. Scores were calculated by summing the
 five dichotomous dimension items (0 = criterion not met, 1 = criterion met)
 for the initial and revised plans, resulting in a total score ranging
 from 0 to 5. <i>N</i> = `r n_children_after` children, total observations =
@@ -1293,7 +1324,7 @@ shapiro_table_h3 |>
 
 - Perceived Helpfulness (*W* = `r fmt(shapiro_help$statistic, 3)`,
 *p* `r format_p(shapiro_help$p.value)`) and Perceived Motivation
-(*W* = `r fmt(shapiro_moti$statistic, 3)`, *p* `r format_p(shapiro_moti$p.value)`)
+(*W* = `r fmt(shapiro_moti$statistic, 3)`, *p* = `r format_p(shapiro_moti$p.value)`)
 significantly deviated from a normal distribution. Therefore a Wilcoxon signed-rank test was performed.
 
 
@@ -1529,15 +1560,15 @@ descriptives_table <- merged_data |>
     Statistik = recode_values(
       Statistik, 
       "MSD" ~ "M (SD)", 
-      "Med" ~ "Med [IPR]"),
-    `<i>N</i>` = ifelse(Statistik == "Med [IPR]", "", `<i>N</i>`)
+      "Med" ~ "Med [IQR]"),
+    `<i>N</i>` = ifelse(Statistik == "Med [IQR]", "", `<i>N</i>`)
   ) |> 
   select(feedback_condition, Statistik, `<i>N</i>`, `Initial PQ`, `Revised PQ`, Improvement, Helpfulness, Motivation, Receptivity) |> 
   rename(`Feedback condition` = feedback_condition, `Metric` = Statistik)
 ```
 
 ```{r descriptives}
-# Render the descriptive statistics table in a publication-ready format using kableExtra, with appropriate alignment, caption, and column specifications. The table presents means (M), standard deviations (SD), medians, and interpercentile ranges (IPR) for each variable by feedback condition.
+# Render the descriptive statistics table in a publication-ready format using kableExtra, with appropriate alignment, caption, and column specifications. The table presents means (M), standard deviations (SD), medians, and interquartil ranges (IQR) for each variable by feedback condition.
 kbl(descriptives_table, 
     escape = FALSE,  
     caption = "Descriptive Statistics by Feedback Condition",
@@ -1554,7 +1585,7 @@ kbl(descriptives_table,
 
 ```
 
-<small> *Note.* PQ = Plan Quality. IPR = Interpercentile range (25th–75th percentile). 
+<small> *Note.* PQ = Plan Quality. IQR = Interquartil range. 
 Plan-quality scores ranged from 0 to 5. Improvement was calculated as the difference between revised and
 initial plan quality scores. 
 Perceived Helpfulness/Motivation are based on participants’ within-person mean scores
@@ -1807,6 +1838,7 @@ emm |>
 ```
 <small> *Note.* Estimated marginal means of revised plan quality are adjusted for initial plan quality (trial-level and child-level) and represent the expected revised plan quality for each feedback condition. Error bars indicate 95% confidence intervals. 
 </small>
+
 
 ## Research Question 2
 
@@ -2312,7 +2344,7 @@ anova_initial_summary <- as.data.frame(anova_initial$anova_table) |>
   tibble::rownames_to_column("Effect") |>
   dplyr::transmute(
     Effect,
-    `$df$` = paste(fmt(`num Df`, digits = 0), fmt(`den Df`, digits = 0), sep = ", "),
+    `$df$` = paste(fmt(`num Df`, digits = 2), fmt(`den Df`, digits = 2), sep = ", "),
     `$F$` = fmt(`F`),
     `$p$` = format_p(`Pr(>F)`),
     `$\\eta^2_G$` = fmt(ges, digits = 2),
@@ -2330,11 +2362,11 @@ kableExtra::kbl(
   row_spec(0, extra_css = "text-align: center;")
 ```
 
-*Note.* Results are based on a one-way repeated measures analysis of
+*Note.* η²G = generalized eta-squared. Results are based on a one-way repeated measures analysis of
 variance evaluating the effect of trial ID on initial plan quality.
 Because trial_id has 6 levels, Mauchly's test for sphericity was
 conducted, *W* = `r fmt(summary(anova_initial)$sphericity.tests[1, "Test statistic"])`,
-*p* `r format_p(summary(anova_initial)$sphericity.tests[1, "p-value"])`; *F*, *p*, and η²_G are Greenhouse-Geisser corrected wherever sphericity was violated (ε < 1), as reflected in the ε (GG) column.
+*p* = `r format_p(summary(anova_initial)$sphericity.tests[1, "p-value"])`. Greenhouse-Geisser correction was applied to all within-subjects effects; ε is reported in the ε(GG) column.
 
 
 ```{r trial-anova-revised-table}
@@ -2343,13 +2375,13 @@ anova_revised_summary <- as.data.frame(anova_revised$anova_table) |>
   tibble::rownames_to_column("Effect") |>
   dplyr::transmute(
     Effect,
-    `$df$` = paste(fmt(`num Df`, digits = 0), fmt(`den Df`, digits = 0), sep = ", "),
+    `$df$` = paste(fmt(`num Df`, digits = 2), fmt(`den Df`, digits = 2), sep = ", "),
     `$F$` = fmt(`F`),
     `$p$` = format_p(`Pr(>F)`),
     `$\\eta^2_G$` = fmt(ges, digits = 2),
     `$\\varepsilon_{GG}$` = fmt(gg_eps_revised, digits = 2)
   ) |>
-  dplyr::select(Effect, `$F$`, `$df$`, `$p$`, `$\\eta^2_G$`, `$\\varepsilon_{GG}$`)
+  dplyr::select(Effect, `$df$`, `$F$`, `$p$`, `$\\eta^2_G$`, `$\\varepsilon_{GG}$`)
 
 kableExtra::kbl(
   anova_revised_summary,
@@ -2360,11 +2392,11 @@ kableExtra::kbl(
   row_spec(0, extra_css = "text-align: center;")
 ```
 
-*Note.* Results are based on a one-way repeated measures analysis of
+*Note.* η²G = generalized eta-squared. Results are based on a one-way repeated measures analysis of
 variance evaluating the effect of trial ID on revised plan quality.
 Because trial_id has 6 levels, Mauchly's test for sphericity was
 conducted, *W* = `r fmt(summary(anova_revised)$sphericity.tests[1, "Test statistic"])`,
-*p* `r format_p(summary(anova_revised)$sphericity.tests[1, "p-value"])`; *F*, *p*, and η²_G are Greenhouse-Geisser corrected wherever sphericity was violated (ε < 1), as reflected in the ε (GG) column.
+*p* = `r format_p(summary(anova_revised)$sphericity.tests[1, "p-value"])`. Greenhouse-Geisser correction was applied to all within-subjects effects; ε is reported in the ε(GG) column.
 
 ## Distribution of Plan Quality across Scenarios
 
@@ -2433,7 +2465,7 @@ anova_initial_scenario_summary <- as.data.frame(anova_initial_scenario$anova_tab
   tibble::rownames_to_column("Effect") |>
   dplyr::transmute(
     Effect,
-    `$df$` = paste(fmt(`num Df`, digits = 0), fmt(`den Df`, digits = 0), sep = ", "),
+    `$df$` = paste(fmt(`num Df`, digits = 2), fmt(`den Df`, digits = 2), sep = ", "),
     `$F$` = fmt(`F`),
     `$p$` = format_p(`Pr(>F)`),
     `$\\eta^2_G$` = fmt(ges, digits = 2),
@@ -2450,9 +2482,9 @@ kableExtra::kbl(
   row_spec(0, extra_css = "text-align: center;")
 ```
 
-*Note*. Results are based on a one-way repeated measures analysis of variance evaluating the effect of scenario ID on revised plan quality.
+*Note*. η²G = generalized eta-squared. Results are based on a one-way repeated measures analysis of variance evaluating the effect of scenario ID on revised plan quality.
 Because scenario has 6 levels, Mauchly's test for sphericity was conducted, *W* = `r fmt(summary(anova_initial_scenario)$sphericity.tests[1, "Test statistic"])`,
-*p* `r format_p(summary(anova_initial_scenario)$sphericity.tests[1, "p-value"])`; *F*, *p*, and η²_G are Greenhouse-Geisser corrected wherever sphericity was violated (ε < 1), as reflected in the ε (GG) column.
+*p* = `r format_p(summary(anova_initial_scenario)$sphericity.tests[1, "p-value"])`. Greenhouse-Geisser correction was applied to all within-subjects effects; ε is reported in the ε(GG) column.
 
 
 ```{r scenario-anova-revised-table}
@@ -2460,7 +2492,7 @@ anova_revised_scenario_summary <- as.data.frame(anova_revised_scenario$anova_tab
   tibble::rownames_to_column("Effect") |>
   dplyr::transmute(
     Effect,
-    `$df$` = paste(fmt(`num Df`, digits = 0), fmt(`den Df`, digits = 0), sep = ", "),
+    `$df$` = paste(fmt(`num Df`, digits = 2), fmt(`den Df`, digits = 2), sep = ", "),
     `$F$` = fmt(`F`),
     `$p$` = format_p(`Pr(>F)`),
     `$\\eta^2_G$` = fmt(ges, digits = 2),
@@ -2477,7 +2509,7 @@ kableExtra::kbl(
   row_spec(0, extra_css = "text-align: center;")
 
 ```
-*Note*. Results are based on a one-way repeated measures analysis of variance evaluating the effect of scenario ID on revised plan quality. Mauchly's test for sphericity was conducted, *W* = `r fmt(summary(anova_revised_scenario)$sphericity.tests[1, "Test statistic"])`, *p* `r format_p(summary(anova_revised_scenario)$sphericity.tests[1, "p-value"])`; *F*, *p*, and η²_G are Greenhouse-Geisser corrected wherever sphericity was violated (ε < 1), as reflected in the ε (GG) column.
+*Note*. η²G = generalized eta-squared. Results are based on a one-way repeated measures analysis of variance evaluating the effect of scenario ID on revised plan quality. Mauchly's test for sphericity was conducted, *W* = `r fmt(summary(anova_revised_scenario)$sphericity.tests[1, "Test statistic"])`, *p* = `r format_p(summary(anova_revised_scenario)$sphericity.tests[1, "p-value"])`. Greenhouse-Geisser correction was applied to all within-subjects effects; ε is reported in the ε(GG) column.
 
 
 ## Distribution of Plan Quality by Gender
@@ -2526,7 +2558,7 @@ anova_gender_summary <- as.data.frame(anova_gender$anova_table) |>
   tibble::rownames_to_column("Effect") |>
   dplyr::transmute(
     Effect,
-    `$df$` = paste(fmt(`num Df`, digits = 0), fmt(`den Df`, digits = 0), sep = ", "),
+    `$df$` = paste(fmt(`num Df`, digits = 2), fmt(`den Df`, digits = 2), sep = ", "),
     `$F$` = fmt(`F`),
     `$p$` = format_p(`Pr(>F)`),
     `$\\eta^2_G$` = fmt(ges, digits = 2)
@@ -2548,7 +2580,7 @@ summary_data_gender <- long_data_gender |>
             .groups = 'drop')
 ```
 
-<small> *Note.* Results are based on a 2 (Time: initial vs. revised plan quality) × 2 (Gender: male, female) mixed-design ANOVA, with time as the within-subjects factor and gender as the between-subjects factor. The "other" gender category was not represented in the analytic sample (*n* = 0) and therefore dropped from the model. Because the within-subjects factor has only two levels, the sphericity assumption is trivially met and no Greenhouse-Geisser correction was required. </small>
+<small> *Note.* η²G = generalized eta-squared. Results are based on a 2 (Time: initial vs. revised plan quality) × 2 (Gender: male, female) mixed-design ANOVA, with time as the within-subjects factor and gender as the between-subjects factor. The "other" gender category was not represented in the analytic sample (*n* = 0) and therefore dropped from the model. Because the within-subjects factor has only two levels, the sphericity assumption is trivially met and no Greenhouse-Geisser correction was required. </small>
 
 
 ```{r mixed-anova-gender-figure, fig.cap="Mixed Anova of Plan Quality"}
@@ -2565,7 +2597,7 @@ ggplot(summary_data_gender, aes(x = time, y = mean_pq, color = gender, group = g
 ```
 <small> *Note.* Points represent estimated means of plan quality by time point (initial vs. revised) and gender; error bars indicate ±1 *SE*. </small>
 
-- Plan quality improved substantially from the initial to the revised plan for both genders, *F*(`r fmt(anova_gender$anova_table["time", "num Df"], 0)`, `r fmt(anova_gender$anova_table["time", "den Df"], 0)`) = `r fmt(anova_gender$anova_table["time", "F"])`, *p* `r format_p(anova_gender$anova_table["time", "Pr(>F)"])`, η²_G = `r fmt(anova_gender$anova_table["time", "ges"])`.
+- Plan quality improved substantially from the initial to the revised plan for both genders, *F*(`r fmt(anova_gender$anova_table["time", "num Df"], 0)`, `r fmt(anova_gender$anova_table["time", "den Df"], 0)`) = `r fmt(anova_gender$anova_table["time", "F"])`, *p* = `r format_p(anova_gender$anova_table["time", "Pr(>F)"])`, η²_G = `r fmt(anova_gender$anova_table["time", "ges"])`.
 - Girls showed higher plan quality than boys at both time points, *F*(`r fmt(anova_gender$anova_table["gender", "num Df"], 0)`, `r fmt(anova_gender$anova_table["gender", "den Df"], 0)`) = `r fmt(anova_gender$anova_table["gender", "F"])`, *p* `r format_p(anova_gender$anova_table["gender", "Pr(>F)"])`, η²_G = `r fmt(anova_gender$anova_table["gender", "ges"])`, but the two genders improved to a comparable extent, as indicated by the non-significant time × gender interaction.
 
 
@@ -2829,3 +2861,9 @@ Ecology and Evolution, 4(2), 133–142.
 
 Nunnally, J. C. (1978). Psychometric Theory (2nd ed.). New York:
 McGraw-Hill.
+
+
+
+
+
+
